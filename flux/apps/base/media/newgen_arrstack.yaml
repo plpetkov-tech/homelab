@@ -136,9 +136,6 @@ spec:
   selector:
     app: deluge
 ---
-# IngressRoute for deluge removed - replaced by Istio VirtualService
-# Original route: Host(`deluge.dunde.live`) -> service: deluge:8112
----
 # Jellyfin StatefulSet
 apiVersion: apps/v1
 kind: StatefulSet
@@ -158,7 +155,7 @@ spec:
     spec:
       containers:
       - name: jellyfin
-        image: lscr.io/linuxserver/jellyfin:latest 
+        image: lscr.io/linuxserver/jellyfin:latest
         env:
         - name: TZ
           value: "Europe/Athens"
@@ -229,9 +226,6 @@ spec:
   selector:
     app: jellyfin
 ---
-# IngressRoute for jellyfin removed - replaced by Istio VirtualService
-# Original route: Host(`jellyfin.dunde.live`) -> service: jellyfin:8096
----
 # Jackett StatefulSet
 apiVersion: apps/v1
 kind: StatefulSet
@@ -251,7 +245,7 @@ spec:
     spec:
       containers:
       - name: jackett
-        image: lscr.io/linuxserver/jackett:0.22.2315@sha256:a0622ddb066614f9e9257f0628fbb186a85f8c1d3e2be5a7be562f34bdc6a2e7 # {"$imagepolicy": "flux-system:jackett"}
+        image: lscr.io/linuxserver/jackett:0.22.2319@sha256:6bbf949218ed7d322237010eddde9a2316f3c7d572659bd064af811b91b350c6 # {"$imagepolicy": "flux-system:jackett"}
         env:
         - name: TZ
           value: "Europe/Athens"
@@ -299,9 +293,6 @@ spec:
   selector:
     app: jackett
 ---
-# IngressRoute for jackett removed - replaced by Istio VirtualService
-# Original route: Host(`jackett.dunde.live`) -> service: jackett:9117
----
 # Radarr StatefulSet
 apiVersion: apps/v1
 kind: StatefulSet
@@ -321,7 +312,7 @@ spec:
     spec:
       containers:
       - name: radarr
-        image: lscr.io/linuxserver/radarr:5.26.2@sha256:ae89f05ad7023258730ed62f5fcca63aab1e27ee5adcca1edb55d716f7cef356 # {"$imagepolicy": "flux-system:radarr"}
+        image: lscr.io/linuxserver/radarr:5.26.2@sha256:c2adf66bafefa781401d07d358e399c476bdffb9a179a2780bb465bda8a55a51 # {"$imagepolicy": "flux-system:radarr"}
         env:
         - name: TZ
           value: "Europe/Athens"
@@ -375,9 +366,6 @@ spec:
   selector:
     app: radarr
 ---
-# IngressRoute for radarr removed - replaced by Istio VirtualService
-# Original route: Host(`radarr.dunde.live`) -> service: radarr:7878
----
 # Sonarr StatefulSet
 apiVersion: apps/v1
 kind: StatefulSet
@@ -397,7 +385,7 @@ spec:
     spec:
       containers:
       - name: sonarr
-        image: lscr.io/linuxserver/sonarr:4.0.15@sha256:c0836f49c20000e603170dc95d74c2527e690d50309977d94fc171eaa49351a4 # {"$imagepolicy": "flux-system:sonarr"}
+        image: lscr.io/linuxserver/sonarr:4.0.15@sha256:1a90192952c30f9420994b2e2171083ea8cae100357de5e9eb25890efa90a6ce # {"$imagepolicy": "flux-system:sonarr"}
         env:
         - name: TZ
           value: "Europe/Athens"
@@ -450,9 +438,6 @@ spec:
     targetPort: 8989
   selector:
     app: sonarr
----
-# IngressRoute for sonarr removed - replaced by Istio VirtualService
-# Original route: Host(`sonarr.dunde.live`) -> service: sonarr:8989
 ---
 # Tubesync StatefulSet
 apiVersion: apps/v1
@@ -520,6 +505,3 @@ spec:
     targetPort: 4848
   selector:
     app: tubesync
----
-# IngressRoute for tubesync removed - replaced by Istio VirtualService
-# Original route: Host(`tubesync.dunde.live`) -> service: tubesync:4848
