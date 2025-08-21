@@ -1,0 +1,33 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dunde-live-tls
+  namespace: istio-system
+spec:
+  secretName: dunde-live-tls
+  secretTemplate:
+    annotations:
+      reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
+      reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  dnsNames:
+    - "dunde.live"
+    - "*.dunde.live"
+---
+# Certificate for Istio Gateway (using existing cert-manager setup)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dunde-live-istio-tls
+  namespace: istio-system
+spec:
+  secretName: dunde-live-istio-tls
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  dnsNames:
+    - "dunde.live"
+    - "*.dunde.live"

@@ -1,0 +1,269 @@
+---
+# Working GPU Operator DaemonSets that bypass the broken node selector logic
+- name: Deploy Working GPU Operator Components
+  hosts: controlplane[0]
+  gather_facts: false
+  vars:
+    cluster_config: "{{ lookup('file', 'tmp/' + cluster_name + '/cluster_config.json') | from_json }}"
+    kubeconfig_file: "{{ lookup('env', 'HOME') }}/.kube/{{ cluster_config.kubeconfig_file_name }}"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_file }}"
+  tasks:
+    - name: Check if there are GPU nodes in the cluster
+      set_fact:
+        gpu_nodes_exist: >-
+          {{ cluster_config.node_classes.gpu is defined and cluster_config.node_classes.gpu.count > 0 }}
+
+    - name: Skip if no GPU nodes
+      meta: end_play
+      when: not gpu_nodes_exist
+
+    - name: Deploy working NVIDIA container toolkit DaemonSet
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: DaemonSet
+          metadata:
+            name: nvidia-container-toolkit-working
+            namespace: gpu-operator
+            labels:
+              app: nvidia-container-toolkit-working
+          spec:
+            selector:
+              matchLabels:
+                app: nvidia-container-toolkit-working
+            template:
+              metadata:
+                labels:
+                  app: nvidia-container-toolkit-working
+              spec:
+                nodeSelector:
+                  nodeclass: gpu
+                tolerations:
+                - key: gpu
+                  operator: Equal
+                  value: "true"
+                  effect: NoSchedule
+                - key: nvidia.com/gpu
+                  operator: Exists
+                  effect: NoSchedule
+                containers:
+                - name: nvidia-container-toolkit-ctr
+                  image: nvcr.io/nvidia/k8s/container-toolkit:v1.17.8-ubuntu20.04
+                  command:
+                  - /bin/bash
+                  - -c
+                  args:
+                  - |
+                    # Wait for validation files created by our validation fix
+                    until [[ -f /run/nvidia/validations/driver-ready ]]
+                    do
+                      echo "waiting for driver validation files..."
+                      sleep 5
+                    done
+                    echo "Found validation files, proceeding with toolkit setup"
+                    nvidia-toolkit &
+                    TOOLKIT_PID=$!
+                    
+                    # Create signal handler for proper cleanup
+                    trap 'echo "Received termination signal, cleaning up..."; nvidia-toolkit cleanup; exit 0' TERM INT
+                    
+                    # Wait for toolkit to complete
+                    wait $TOOLKIT_PID
+                    TOOLKIT_EXIT_CODE=$?
+                    
+                    if [ $TOOLKIT_EXIT_CODE -eq 0 ]; then
+                      echo "Toolkit setup completed successfully, sleeping indefinitely..."
+                      while true; do sleep 3600; done
+                    else
+                      echo "Toolkit setup failed with exit code: $TOOLKIT_EXIT_CODE"
+                      exit $TOOLKIT_EXIT_CODE
+                    fi
+                  securityContext:
+                    privileged: true
+                  env:
+                  - name: ROOT
+                    value: /usr/local/nvidia
+                  - name: NVIDIA_VISIBLE_DEVICES
+                    value: void
+                  - name: TOOLKIT_PID_FILE
+                    value: /run/nvidia/toolkit/toolkit.pid
+                  - name: RUNTIME
+                    value: containerd
+                  - name: CONTAINERD_RUNTIME_CLASS
+                    value: nvidia
+                  - name: RUNTIME_CONFIG
+                    value: /runtime/config-dir/config.toml
+                  - name: CONTAINERD_CONFIG
+                    value: /runtime/config-dir/config.toml
+                  - name: RUNTIME_SOCKET
+                    value: /runtime/sock-dir/containerd.sock
+                  - name: CONTAINERD_SOCKET
+                    value: /runtime/sock-dir/containerd.sock
+                  volumeMounts:
+                  - name: host-root
+                    mountPath: /host
+                    readOnly: true
+                  - name: toolkit-install-dir
+                    mountPath: /usr/local/nvidia
+                  - name: toolkit-root
+                    mountPath: /run/nvidia/toolkit
+                  - name: run-nvidia-validations
+                    mountPath: /run/nvidia/validations
+                  - name: containerd-config
+                    mountPath: /runtime/config-dir/
+                  - name: containerd-socket
+                    mountPath: /runtime/sock-dir/
+                  - name: crio-hooks
+                    mountPath: /usr/share/containers/oci/hooks.d
+                  - name: cdi-root
+                    mountPath: /var/run/cdi
+                volumes:
+                - name: host-root
+                  hostPath:
+                    path: /
+                - name: toolkit-install-dir
+                  hostPath:
+                    path: /usr/local/nvidia
+                - name: toolkit-root
+                  hostPath:
+                    path: /run/nvidia/toolkit
+                    type: DirectoryOrCreate
+                - name: run-nvidia-validations
+                  hostPath:
+                    path: /run/nvidia/validations
+                    type: DirectoryOrCreate
+                - name: containerd-config
+                  hostPath:
+                    path: /etc/containerd
+                    type: DirectoryOrCreate
+                - name: containerd-socket
+                  hostPath:
+                    path: /run/containerd
+                - name: crio-hooks
+                  hostPath:
+                    path: /run/containers/oci/hooks.d
+                - name: cdi-root
+                  hostPath:
+                    path: /var/run/cdi
+                    type: DirectoryOrCreate
+                priorityClassName: system-node-critical
+      delegate_to: localhost
+
+    - name: Deploy working NVIDIA device plugin DaemonSet
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: DaemonSet
+          metadata:
+            name: nvidia-device-plugin-working
+            namespace: gpu-operator
+            labels:
+              app: nvidia-device-plugin-working
+          spec:
+            selector:
+              matchLabels:
+                app: nvidia-device-plugin-working
+            template:
+              metadata:
+                labels:
+                  app: nvidia-device-plugin-working
+              spec:
+                nodeSelector:
+                  nodeclass: gpu
+                tolerations:
+                - key: gpu
+                  operator: Equal
+                  value: "true"
+                  effect: NoSchedule
+                - key: nvidia.com/gpu
+                  operator: Exists
+                  effect: NoSchedule
+                containers:
+                - name: nvidia-device-plugin-ctr
+                  image: nvcr.io/nvidia/k8s-device-plugin:v0.17.2
+                  args:
+                  - "--device-discovery-strategy=nvml"
+                  - "--fail-on-init-error=false"
+                  - "--pass-device-specs=true"
+                  - "--config-file=/config/any"
+                  securityContext:
+                    privileged: true
+                  env:
+                  - name: NODE_NAME
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: spec.nodeName
+                  - name: NVIDIA_VISIBLE_DEVICES
+                    value: all
+                  - name: LD_LIBRARY_PATH
+                    value: /usr/lib/x86_64-linux-gnu/nvidia/current:/usr/lib/x86_64-linux-gnu:/usr/lib64
+                  volumeMounts:
+                  - name: device-plugin
+                    mountPath: /var/lib/kubelet/device-plugins
+                  - name: dev
+                    mountPath: /dev
+                  - name: config
+                    mountPath: /config
+                  - name: nvidia-install-dir
+                    mountPath: /usr/local/nvidia
+                  - name: nvidia-lib
+                    mountPath: /usr/lib/x86_64-linux-gnu/nvidia
+                    readOnly: true
+                  - name: sys
+                    mountPath: /sys
+                volumes:
+                - name: device-plugin
+                  hostPath:
+                    path: /var/lib/kubelet/device-plugins
+                - name: dev
+                  hostPath:
+                    path: /dev
+                - name: config
+                  configMap:
+                    name: time-slicing-config
+                - name: nvidia-install-dir
+                  hostPath:
+                    path: /usr/local/nvidia
+                - name: nvidia-lib
+                  hostPath:
+                    path: /usr/lib/x86_64-linux-gnu/nvidia
+                - name: sys
+                  hostPath:
+                    path: /sys
+                priorityClassName: system-node-critical
+      delegate_to: localhost
+
+    - name: Wait for working GPU components to be ready
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: gpu-operator
+        label_selectors:
+          - "app in (nvidia-container-toolkit-working, nvidia-device-plugin-working)"
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+      delegate_to: localhost
+
+    - name: Verify GPU resources are available
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Node
+        label_selectors:
+          - "nodeclass=gpu"
+      register: gpu_nodes_status
+      delegate_to: localhost
+
+    - name: Display GPU status
+      debug:
+        msg: |
+          GPU Node: {{ item.metadata.name }}
+          GPU Resources: {{ item.status.allocatable.get('nvidia.com/gpu', 'Not available') }}
+          GPU Product: {{ item.metadata.labels.get('nvidia.com/gpu.product', 'Unknown') }}
+      loop: "{{ gpu_nodes_status.resources }}"
+      when: gpu_nodes_status.resources | length > 0

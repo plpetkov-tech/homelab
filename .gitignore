@@ -1,0 +1,55 @@
+# SOPS Age Keys (NEVER commit these\!)
+apps/base/training/**
+age.agekey
+*.agekey
+
+CLAUDE.md
+# Kubernetes Config
+kubeconfig
+*.kubeconfig
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Backup files
+*.bak
+*.backup
+
+# Environment files
+.env
+.env.local
+
+# Development and testing
+test-*.yaml
+dev-*.yaml
+debug-*.yaml
+EOF < /dev/null
+.claude
+.idea
+.terraform*
+terraform/secrets.tf
+terraform/terraform.tfstate*
+ansible/tmp
+*.DS_Store
+scripts/.env
+proxmox_creds.txt
+CLAUDE.md

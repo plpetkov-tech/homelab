@@ -1,0 +1,173 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: flux-system
+spec:
+  interval: 15m
+  timeout: 15m
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: 72.5.1
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+        namespace: flux-system
+  targetNamespace: monitoring
+  install:
+    crds: Create 
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  values:
+    crds:
+      enabled: true
+    prometheus-node-exporter:
+      hostRootFsMount:
+        enabled: false
+    prometheusOperator:
+      admissionWebhooks:
+        failurePolicy: Ignore
+    kubeApiServer:
+      enabled: true
+    kubelet:
+      enabled: true
+      serviceMonitor:
+        cAdvisor: true
+        probes: true
+        resource: true
+        resourcePath: "/metrics/resource"
+    kubeControllerManager:
+      enabled: true
+    coreDns:
+      enabled: true
+    kubeEtcd:
+      enabled: true
+      service:
+        enabled: true
+        port: 2381
+        targetPort: 2381
+      serviceMonitor:
+        enabled: true
+        scheme: https
+        insecureSkipVerify: true
+    kubeScheduler:
+      enabled: true
+    kubeProxy:
+      enabled: true
+    kubeStateMetrics:
+      enabled: true
+    nodeExporter:
+      enabled: true
+    grafana:
+      grafana.ini:
+        server:
+          root_url: "https://grafana.dunde.live"
+        feature_toggles:
+          enable: "tempoSearch tempoBackendSearch"
+        auth.anonymous:
+          enabled: false
+      persistence:
+        enabled: true
+        type: sts
+        storageClassName: "longhorn"
+        accessModes:
+          - ReadWriteOnce
+        size: 10Gi
+        finalizers:
+          - kubernetes.io/pvc-protection
+      sidecar:
+        dashboards:
+          enabled: true
+          label: grafana_dashboard
+          labelValue: "1"
+          folder: /var/lib/grafana/dashboards
+          searchNamespace: monitoring
+          provider:
+            allowUiUpdates: true
+            foldersFromFilesStructure: true
+        datasources:
+          enabled: true
+          defaultDatasourceEnabled: true
+          label: grafana_datasource
+          labelValue: "1"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 1Gi
+    prometheus:
+      prometheusSpec:
+        alerting:
+          alertmanagers:
+          - name: monitoring-kube-prometheus-alertmanager
+            namespace: monitoring
+            port: web
+        storageSpec: 
+          volumeClaimTemplate:
+            spec:
+              storageClassName: longhorn 
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 20Gi
+        enableFeatures:
+          - auto-gomemlimit
+          - memory-snapshot-on-shutdown
+          - expand-external-labels
+        retention: 30d
+        retentionSize: 15GB
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2Gi
+          limits:
+            memory: 8Gi
+        serviceMonitorSelectorNilUsesHelmValues: false
+        podMonitorSelectorNilUsesHelmValues: false
+        ruleSelectorNilUsesHelmValues: false
+        serviceMonitorNamespaceSelector: {}
+        podMonitorNamespaceSelector: {}
+        ruleNamespaceSelector: {}
+        scrapeInterval: 30s
+        scrapeTimeout: 10s
+        evaluationInterval: 30s
+        externalLabels:
+          cluster: "homelab"
+          environment: "production"
+        walCompression: true
+        additionalScrapeConfigs:
+          - job_name: 'kubectlshop'
+            scheme: https
+            scrape_interval: 30s
+            static_configs:
+            - targets: ['metrics-ns-operator.kubectl.shop', 'metrics-main-operator.kubectl.shop']
+          - job_name: 'kubernetes-pods'
+            kubernetes_sd_configs:
+            - role: pod
+            relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+              action: keep
+              regex: true
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+              action: replace
+              target_label: __metrics_path__
+              regex: (.+)
+            - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+              action: replace
+              regex: ([^:]+)(?::\d+)?;(\d+)
+              replacement: $1:$2
+              target_label: __address__
+            - action: labelmap
+              regex: __meta_kubernetes_pod_label_(.+)
+            - source_labels: [__meta_kubernetes_namespace]
+              action: replace
+              target_label: kubernetes_namespace
+            - source_labels: [__meta_kubernetes_pod_name]
+              action: replace
+              target_label: kubernetes_pod_name

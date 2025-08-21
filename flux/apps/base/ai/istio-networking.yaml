@@ -1,0 +1,137 @@
+---
+# AI/ML Services VirtualServices
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: hoarder-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - hoarder.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: hoarder.hoarder.svc.cluster.local
+        port:
+          number: 3000
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: fooocus-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - fooocus.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: jupyter-gpu.llm.svc.cluster.local
+        port:
+          number: 7865
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: jupyter-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - jupyter.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: jupyter-gpu.llm.svc.cluster.local
+        port:
+          number: 8888
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: ollama-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - ollama.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: ollama-gpu.llm.svc.cluster.local
+        port:
+          number: 11434
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: n8n-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - n8n.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: n8n-n8n.n8n.svc.cluster.local
+        port:
+          number: 80
+    headers:
+      request:
+        set:
+          x-forwarded-proto: https
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: wh-n8n-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - wh-n8n.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: n8n-n8n.n8n.svc.cluster.local
+        port:
+          number: 80
+    headers:
+      request:
+        set:
+          x-forwarded-proto: https
+      response:
+        set:
+          x-frame-options: SAMEORIGIN
+          x-content-type-options: nosniff
+          x-xss-protection: "1; mode=block"
+          strict-transport-security: "max-age=15552000; includeSubDomains; preload"
+          referrer-policy: no-referrer
+          content-security-policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob:; worker-src 'self' blob:; img-src 'self' data: https: http://www.w3.org/2000/svg; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self';"

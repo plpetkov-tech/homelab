@@ -1,0 +1,56 @@
+---
+# Service for external etcd cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: etcd-external
+  namespace: kube-system
+  labels:
+    k8s-app: etcd
+    app.kubernetes.io/name: etcd
+spec:
+  clusterIP: None
+  ports:
+  - name: http-metrics
+    port: 2381
+    protocol: TCP
+    targetPort: 2381
+---
+# Manual endpoints for external etcd cluster
+apiVersion: v1  
+kind: Endpoints
+metadata:
+  name: etcd-external
+  namespace: kube-system
+subsets:
+- addresses:
+  - ip: 10.11.12.110  # gamma-etcd-0
+  - ip: 10.11.12.111  # gamma-etcd-1  
+  - ip: 10.11.12.112  # gamma-etcd-2
+  ports:
+  - name: http-metrics
+    port: 2381
+    protocol: TCP
+---
+# ServiceMonitor for external etcd
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: etcd-external
+  namespace: monitoring
+  labels:
+    app: etcd-external
+spec:
+  jobLabel: k8s-app
+  selector:
+    matchLabels:
+      k8s-app: etcd
+  namespaceSelector:
+    matchNames:
+    - kube-system
+  endpoints:
+  - port: http-metrics
+    interval: 30s
+    scheme: http
+    honorLabels: true
+    path: /metrics

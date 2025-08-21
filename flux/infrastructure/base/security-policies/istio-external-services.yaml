@@ -1,0 +1,108 @@
+---
+# ServiceEntry for Proxmox VE external service
+# Uses TLS passthrough for proper HTTPS handling
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: pve-external
+  namespace: istio-system
+spec:
+  hosts:
+  - pve-external.local
+  ports:
+  - number: 8006
+    name: https
+    protocol: TLS
+  location: MESH_EXTERNAL
+  resolution: STATIC
+  endpoints:
+  - address: 10.11.12.136
+---
+# ServiceEntry for Cloud service external service  
+# Uses TLS passthrough for proper HTTPS handling
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: cloud-external
+  namespace: istio-system
+spec:
+  hosts:
+  - cloud-external.local
+  ports:
+  - number: 443
+    name: https
+    protocol: TLS
+  location: MESH_EXTERNAL
+  resolution: STATIC
+  endpoints:
+  - address: 10.11.12.187
+---
+# VirtualService for PVE - Use HTTPS termination with our cert, then TLS origination
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: pve-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - pve.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: pve-external.local
+        port:
+          number: 8006
+---
+# VirtualService for Cloud - Use HTTPS termination with our cert, then TLS origination  
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: cloud-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - cloud.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: cloud-external.local
+        port:
+          number: 443
+---
+# DestinationRule for PVE - TLS origination with insecure skip verify
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: pve-external-dr
+  namespace: istio-system
+spec:
+  host: pve-external.local
+  trafficPolicy:
+    tls:
+      mode: SIMPLE
+      # Skip certificate verification for self-signed backend cert
+      insecureSkipVerify: true
+---
+# DestinationRule for Cloud - TLS origination with insecure skip verify
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: cloud-external-dr
+  namespace: istio-system
+spec:
+  host: cloud-external.local
+  trafficPolicy:
+    tls:
+      mode: SIMPLE
+      # Skip certificate verification for self-signed backend cert
+      insecureSkipVerify: true

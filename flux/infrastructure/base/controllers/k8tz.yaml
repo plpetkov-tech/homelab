@@ -1,0 +1,27 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: k8tz
+  namespace: flux-system
+spec:
+  interval: 15m
+  timeout: 10m
+  chart:
+    spec:
+      chart: k8tz
+      version: 0.17.1
+      sourceRef:
+        kind: HelmRepository
+        name: k8tz
+        namespace: flux-system
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  values:
+    timezone: Europe/Sofia

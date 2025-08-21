@@ -1,0 +1,34 @@
+---
+# Telemetry configuration for Istio metrics
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: default-metrics
+  namespace: istio-system
+spec:
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        destination_cluster:
+          operation: UPSERT
+          value: "homelab-gamma"
+        source_cluster:
+          operation: UPSERT
+          value: "homelab-gamma"
+---
+# Telemetry configuration for tracing (optional)
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: default-tracing
+  namespace: istio-system
+spec:
+  tracing:
+  - providers:
+    - name: jaeger
+  # Sample 1% of requests for tracing (homelab traffic is low)
+  - randomSamplingPercentage: 1.0

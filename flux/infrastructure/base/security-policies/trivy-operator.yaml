@@ -1,0 +1,189 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: trivy-operator
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://aquasecurity.github.io/helm-charts/
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: trivy-operator
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: trivy-operator
+      version: '0.25.0'
+      sourceRef:
+        kind: HelmRepository
+        name: trivy-operator
+        namespace: flux-system
+      interval: 12h
+  targetNamespace: trivy-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    operator:
+      replicas: 1
+      logLevel: 1
+      scanJobsConcurrencyLimit: 10
+      scanJobsRetryDelay: 30s
+      batchDeleteLimit: 10
+      batchDeleteDelay: 10s
+      accessGlobalSecretsAndServiceAccount: true
+      builtInTrivyServer: false
+      metricsVulnIdEnabled: true
+      
+    service:
+      metricsPort: 8080
+      
+    serviceMonitor:
+      enabled: false
+      interval: 30s
+      
+    rbac:
+      create: true
+      
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+        
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    
+    image:
+      repository: aquasec/trivy-operator
+      tag: 0.25.0
+      pullPolicy: IfNotPresent
+      
+    trivyOperator:
+      configAuditScannerEnabled: true
+      vulnerabilityScannerEnabled: true
+      rbacAssessmentScannerEnabled: true
+      configAuditScannerScanOnlyCurrentRevisions: true
+      batchDeleteLimit: 10
+      batchDeleteDelay: 10s
+      accessGlobalSecretsAndServiceAccount: true
+      builtInTrivyServer: false
+      
+    trivy:
+      repository: aquasec/trivy
+      tag: 0.55.2
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+      mode: Standalone
+      serverInsecure: false
+      timeout: 5m0s
+      
+    compliance:
+      failEntriesLimit: 10
+      reportType: summary
+      
+    excludeNamespaces:
+      - kube-system
+      - kube-public
+      - kube-node-lease
+      - flux-system
+      - gpu-operator
+      
+    targetNamespaces: ""
+    
+    scanJobTolerations: []
+    scanJobAnnotations: {}
+    scanJobPodTemplateLabels: {}
+    scanJobPodTemplatePodSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 0
+    scanJobPodTemplateContainerSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: false
+      runAsNonRoot: false
+      capabilities:
+        drop:
+        - ALL
+    
+    policies:
+      - name: builtin
+        default: true
+        
+    webhooks:
+      configAuditReport: []
+      vulnerabilityReport: []
+      exposedSecretReport: []
+      rbacAssessmentReport: []
+      
+    podAnnotations: {}
+    podLabels: {}
+    
+    securityContext:
+      runAsUser: 10000
+      runAsGroup: 10000
+      runAsNonRoot: true
+      fsGroup: 10000
+      
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 10000
+      runAsGroup: 10000
+      capabilities:
+        drop:
+        - ALL
+        
+    env:
+      - name: OPERATOR_NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+      - name: OPERATOR_TARGET_NAMESPACES
+        value: ""
+      - name: OPERATOR_EXCLUDE_NAMESPACES
+        value: "kube-system,kube-public,kube-node-lease,flux-system"
+      - name: OPERATOR_LOG_DEV_MODE
+        value: "false"
+      - name: OPERATOR_SCAN_JOB_RETRY_DELAY
+        value: "30s"
+      - name: OPERATOR_BATCH_DELETE_LIMIT
+        value: "10"
+      - name: OPERATOR_BATCH_DELETE_DELAY
+        value: "10s"
+      - name: OPERATOR_METRICS_BIND_ADDRESS
+        value: ":8080"
+      - name: OPERATOR_HEALTH_PROBE_BIND_ADDRESS
+        value: ":9090"
+      - name: OPERATOR_CONFIG_AUDIT_SCANNER_ENABLED
+        value: "true"
+      - name: OPERATOR_VULNERABILITY_SCANNER_ENABLED
+        value: "true"
+      - name: OPERATOR_RBAC_ASSESSMENT_SCANNER_ENABLED
+        value: "true"
+      - name: OPERATOR_CONFIG_AUDIT_SCANNER_SCAN_ONLY_CURRENT_REVISIONS
+        value: "true"
+      - name: OPERATOR_ACCESS_GLOBAL_SECRETS_SERVICE_ACCOUNTS
+        value: "true"
+      - name: OPERATOR_BUILT_IN_TRIVY_SERVER
+        value: "false"

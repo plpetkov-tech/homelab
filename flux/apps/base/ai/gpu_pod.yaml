@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ollama-gpu
+  namespace: llm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama-gpu
+  serviceName: ollama-gpu
+  template:
+    metadata:
+      labels:
+        app: ollama-gpu
+    spec:
+      containers:
+      - name: ollama
+        image: docker.io/ollama/ollama:0.11.5@sha256:802596626817a4f24ae26c7e3e3e0ba368cfb93e3945fc176bb714000abcbb4d # {"$imagepolicy": "flux-system:ollama"} 
+        imagePullPolicy: Always
+        env:
+        - name: OLLAMA_HOST
+          value: 0.0.0.0
+        - name: OLLAMA_MODELS
+          value: /workspace
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: all
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: compute,utility,graphics
+        - name: DEBIAN_FRONTEND
+          value: noninteractive
+        ports:
+        - containerPort: 11434
+          name: http
+          protocol: TCP
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "500m"
+            memory: 4Gi
+            nvidia.com/gpu: "1"
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /workspace
+          name: ollama-data
+      nodeSelector:
+        nodeclass: gpu
+      tolerations:
+      - key: gpu
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+      runtimeClassName: nvidia
+      securityContext:
+        fsGroup: 1000
+  volumeClaimTemplates:
+  - metadata:
+      name: ollama-data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 150Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-gpu
+  namespace: llm
+spec:
+  selector:
+    app: ollama-gpu
+  ports:
+    - port: 11434
+      targetPort: 11434
+      protocol: TCP
+      name: http
+  type: ClusterIP
+---
+# IngressRoute for ollama removed - replaced by Istio VirtualService
+# Original route: Host(`ollama.dunde.live`) -> service: ollama-gpu:11434

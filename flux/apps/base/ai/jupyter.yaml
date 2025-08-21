@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: jupyter-gpu
+  namespace: llm
+spec:
+  serviceName: jupyter-gpu
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jupyter-gpu
+  template:
+    metadata:
+      labels:
+        app: jupyter-gpu
+    spec:
+      runtimeClassName: nvidia
+      nodeSelector:
+        nodeclass: gpu
+      tolerations:
+      - key: gpu
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+      - name: setup-workspace
+        image: busybox:1.36
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            if [ ! -L /workspace ]; then
+              ln -sf /home/jovyan/work /workspace
+            fi
+        securityContext:
+          privileged: true
+      containers:
+      - name: jupyter
+        image: cschranz/gpu-jupyter:v1.7_cuda-12.2_ubuntu-22.04 # {"$imagepolicy": "flux-system:gpu-jupyter"} 
+        imagePullPolicy: Always
+        securityContext:
+          privileged: true
+        env:
+          - name: NVIDIA_VISIBLE_DEVICES
+            value: "all"
+          - name: NVIDIA_DRIVER_CAPABILITIES
+            value: "compute,utility,graphics"
+          - name: DEBIAN_FRONTEND
+            value: "noninteractive"
+        ports:
+        - containerPort: 8888
+          name: http
+        resources:
+          limits:
+            memory: "16Gi"
+            cpu: "2"
+            nvidia.com/gpu: 1
+          requests:
+            nvidia.com/gpu: 1
+            memory: "4Gi"
+            cpu: "1"
+        volumeMounts:
+        - name: jupyter-data
+          mountPath: /home/jovyan/work 
+  volumeClaimTemplates:
+  - metadata:
+      name: jupyter-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 10Gi
+  - metadata:
+      name: jupyter-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 150Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jupyter-gpu
+  namespace: llm
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8888
+    targetPort: 8888
+    protocol: TCP
+    name: http
+  - port: 7865
+    targetPort: 7865
+    name: http2
+    protocol: TCP
+  selector:
+    app: jupyter-gpu
+---
+
+# IngressRoute for jupyter-gpu removed - replaced by Istio VirtualService
+# Original route: Host(`jupyter.dunde.live`) -> service: jupyter-gpu:8888
+---
+# IngressRoute for foocus-jupyter-gpu removed - replaced by Istio VirtualService
+# Original route: Host(`fooocus.dunde.live`) -> service: jupyter-gpu:7865

@@ -1,0 +1,72 @@
+---
+- name: Apply metrics-server manifest
+  hosts: controlplane[0]
+  gather_facts: false
+  vars:
+    cluster_config: "{{ lookup('file', 'tmp/' + cluster_name + '/cluster_config.json') | from_json }}"
+    metrics_server_version: "{{ lookup('env', 'METRICS_SERVER_VERSION') }}"
+  tasks:
+
+    - name: Calculate the count of non-API/ETCD servers
+      set_fact:
+        non_api_etcd_server_count: "{{ groups['all'] | length - (groups['controlplane'] | default([]) | length + groups['etcd'] | default([]) | length) }}"
+
+    - name: Determine if needing HA based on non-API/ETCD server count
+      set_fact:
+        metrics_server_replica_count: "{{ 1 if non_api_etcd_server_count <= 1 else 2 }}"
+
+    - name: Add Metrics-Server Helm repository
+      ansible.builtin.shell:
+        cmd: helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+      args:
+        executable: /bin/bash
+
+    - name: Update Helm repositories
+      ansible.builtin.shell:
+        cmd: helm repo update
+      args:
+        executable: /bin/bash
+
+    - name: Install Metrics-Server
+      ansible.builtin.shell:
+        cmd: >
+          helm upgrade --install metrics-server metrics-server/metrics-server
+          --namespace kube-system
+          --set replicas={{ metrics_server_replica_count }}
+          --version {{ metrics_server_version }}
+          --wait
+          --timeout 5m0s
+      args:
+        executable: /bin/bash
+      register: metrics_server_install
+      retries: 3
+      delay: 30
+      until: metrics_server_install is succeeded
+
+    - name: Wait for Metrics-Server deployment to be ready
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: metrics-server
+        namespace: kube-system
+        wait: true
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 300
+      register: metrics_server_deployment
+      delegate_to: localhost
+      environment:
+        KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/{{ cluster_config.kubeconfig_file_name }}"
+
+    - name: Verify Metrics-Server is functional
+      ansible.builtin.shell:
+        cmd: kubectl top nodes --no-headers | wc -l
+      register: metrics_test
+      until: metrics_test.stdout | int > 0
+      retries: 10
+      delay: 10
+      delegate_to: localhost
+      environment:
+        KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/{{ cluster_config.kubeconfig_file_name }}"
+      failed_when: false

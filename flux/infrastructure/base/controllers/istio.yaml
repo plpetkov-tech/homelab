@@ -1,0 +1,238 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-system
+  labels:
+    name: istio-system
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: istio
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://istio-release.storage.googleapis.com/charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: istio-base
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: base
+      version: "1.26.2"
+      sourceRef:
+        kind: HelmRepository
+        name: istio
+  targetNamespace: istio-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    defaultRevision: default
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: istiod
+  namespace: flux-system
+spec:
+  interval: 30m
+  dependsOn:
+    - name: istio-base
+  chart:
+    spec:
+      chart: istiod
+      version: "1.26.2"
+      sourceRef:
+        kind: HelmRepository
+        name: istio
+  targetNamespace: istio-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # Ambient mode configuration
+    meshConfig:
+      defaultConfig:
+        proxyMetadata:
+          # Enable ambient mode
+          PILOT_ENABLE_WORKLOAD_ENTRY_AUTOREGISTRATION: true
+          PILOT_ENABLE_AMBIENT: true
+    pilot:
+      env:
+        # Gateway API support
+        PILOT_ENABLE_GATEWAY_API: true
+        PILOT_ENABLE_GATEWAY_API_STATUS: true
+        PILOT_ENABLE_GATEWAY_API_DEPLOYMENT_CONTROLLER: true
+        # Ambient mode - REQUIRED for ztunnel
+        PILOT_ENABLE_AMBIENT: true
+        PILOT_ENABLE_AMBIENT_CONTROLLERS: true
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+    global:
+      # Mesh configuration for ambient mode
+      meshID: mesh1
+      network: network1
+      # Disable injection by default (ambient mode)
+      defaultPodDisruptionBudget:
+        enabled: true
+      # Resource optimization for homelab
+      proxy:
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: istio-cni
+  namespace: flux-system
+spec:
+  interval: 30m
+  dependsOn:
+    - name: istio-base
+  chart:
+    spec:
+      chart: cni
+      version: "1.26.2"
+      sourceRef:
+        kind: HelmRepository
+        name: istio
+  targetNamespace: istio-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    cni:
+      # Compatible with Cilium CNI
+      exclusive: false
+      # Ambient mode specific
+      ambient:
+        enabled: true
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: istio-ztunnel
+  namespace: flux-system
+spec:
+  interval: 30m
+  dependsOn:
+    - name: istio-cni
+    - name: istiod
+  chart:
+    spec:
+      chart: ztunnel
+      version: "1.26.2"
+      sourceRef:
+        kind: HelmRepository
+        name: istio
+  targetNamespace: istio-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # Ztunnel is the L4 node proxy for ambient mode
+    ztunnel:
+      env:
+        # Disable IPv6 to prevent binding errors on nodes without IPv6
+        IPV6_ENABLED: "false"
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: istio-ingressgateway
+  namespace: flux-system
+spec:
+  interval: 30m
+  dependsOn:
+    - name: istiod
+  chart:
+    spec:
+      chart: gateway
+      version: "1.26.2"
+      sourceRef:
+        kind: HelmRepository
+        name: istio
+  targetNamespace: istio-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # Configure ingress gateway
+    service:
+      type: LoadBalancer
+      loadBalancerIP: 10.11.12.200  # Primary IP matching Cloudflare DNS
+      ports:
+        - port: 80
+          targetPort: 8080
+          name: http2
+          protocol: TCP
+        - port: 443
+          targetPort: 8443
+          name: https
+          protocol: TCP
+        - port: 443
+          targetPort: 8443
+          name: https-udp
+          protocol: UDP  # For HTTP/3 QUIC support
+    replicaCount: 3
+    autoscaling:
+      enabled: false
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    podDisruptionBudget:
+      minAvailable: 1
+    # Gateway API support
+    labels:
+      istio: ingressgateway
+      app: istio-ingressgateway

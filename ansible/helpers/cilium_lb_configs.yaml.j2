@@ -1,0 +1,17 @@
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: default-pool
+spec:
+  blocks:
+{% if ipv4_lb_cidrs %}
+{% for range in ipv4_lb_cidrs.split(',') if range.strip() %}
+  - cidr: {{ range.strip() }}
+{% endfor %}
+{% endif %}
+{% if ipv6_lb_cidrs %}
+{% for range in ipv6_lb_cidrs.split(',') if range.strip() %}
+  - cidr: {{ range.strip() }}
+{% endfor %}
+{% endif %}

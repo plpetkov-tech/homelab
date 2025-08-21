@@ -1,0 +1,15 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - n8n-values.yaml
+  - n8n-helmrelease.yaml
+  - n8n-encryption-secret.yaml
+  - n8n-db-secret.yaml
+  - databases.yaml
+  - gpu_pod.yaml
+  - hoarder.yaml
+  - hoarder-secrets.yaml
+  - ingresses.yaml
+  - istio-networking.yaml
+  - jupyter.yaml

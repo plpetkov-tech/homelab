@@ -1,0 +1,96 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flux-system-metrics
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/name: flux-system
+spec:
+  ports:
+  - name: http-metrics
+    port: 8080
+    protocol: TCP
+    targetPort: http-prom
+  selector:
+    app: source-controller
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flux-kustomize-controller-metrics
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/name: flux-system
+spec:
+  ports:
+  - name: http-metrics
+    port: 8080
+    protocol: TCP
+    targetPort: http-prom
+  selector:
+    app: kustomize-controller
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flux-helm-controller-metrics
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/name: flux-system
+spec:
+  ports:
+  - name: http-metrics
+    port: 8080
+    protocol: TCP
+    targetPort: http-prom
+  selector:
+    app: helm-controller
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flux-notification-controller-metrics
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/name: flux-system
+spec:
+  ports:
+  - name: http-metrics
+    port: 8080
+    protocol: TCP
+    targetPort: http-prom
+  selector:
+    app: notification-controller
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flux-image-reflector-controller-metrics
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/name: flux-system
+spec:
+  ports:
+  - name: http-metrics
+    port: 8080
+    protocol: TCP
+    targetPort: http-prom
+  selector:
+    app: image-reflector-controller
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flux-image-automation-controller-metrics
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/name: flux-system
+spec:
+  ports:
+  - name: http-metrics
+    port: 8080
+    protocol: TCP
+    targetPort: http-prom
+  selector:
+    app: image-automation-controller

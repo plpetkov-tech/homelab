@@ -1,0 +1,49 @@
+- name: Install Cilium on Kubernetes Cluster
+  hosts: controlplane[0]
+  gather_facts: false
+  tags:
+    - cilium_basic_install
+  vars:
+    cluster_config: "{{ lookup('file', 'tmp/' + cluster_name + '/cluster_config.json') | from_json }}"
+    cilium_version: "{{ lookup('env', 'CILIUM_VERSION') }}"
+  tasks:
+    - name: Calculate the count of non-API/ETCD servers
+      set_fact:
+        non_api_etcd_server_count: "{{ groups['all'] | length - (groups['controlplane'] | default([]) | length + groups['etcd'] | default([]) | length) }}"
+
+    - name: Determine non-API/ETCD server count
+      set_fact:
+        replica_count: "{{ 1 if non_api_etcd_server_count <= 1 else 2 }}"
+
+    - name: Generate cilium.yaml configuration file
+      become: yes
+      ansible.builtin.template:
+        src: helpers/cilium_config.yaml.j2
+        dest: "/tmp/cilium.yaml"
+      vars:
+        cluster_id: "{{ cluster_config.cluster_id }}"
+        vip: "{{ cluster_config.networking.kube_vip.vip }}"
+      tags:
+        - cilium_config
+
+    - name: Add Cilium Helm repository
+      ansible.builtin.shell:
+        cmd: helm repo add cilium https://helm.cilium.io/
+      args:
+        executable: /bin/bash
+
+    - name: Update Helm repositories
+      ansible.builtin.shell:
+        cmd: helm repo update
+      args:
+        executable: /bin/bash
+
+    - name: Install Cilium
+      ansible.builtin.shell:
+        cmd: >
+          helm upgrade --install cilium cilium/cilium
+          --namespace kube-system
+          --values /tmp/cilium.yaml
+          --version v{{ cilium_version }}
+      args:
+        executable: /bin/bash

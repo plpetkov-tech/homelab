@@ -1,0 +1,252 @@
+---
+# Daily backup schedule for all critical namespaces
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: daily-backup
+  namespace: velero
+spec:
+  schedule: "0 2 * * *" # Daily at 2 AM
+  template:
+    ttl: 720h0m0s # 30 days retention
+    includedNamespaces:
+      - llm
+      - media-server
+      - n8n
+      - monitoring
+      - cert-manager
+      - flux-system
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - kube-node-lease
+      - velero
+    includedResources:
+      - "*"
+    excludedResources:
+      - events
+      - events.events.k8s.io
+    labelSelector:
+      matchExpressions:
+        - key: velero.io/exclude-from-backup
+          operator: NotIn
+          values: ["true"]
+    includeClusterResources: true
+    defaultVolumesToFsBackup: true
+    storageLocation: default
+---
+# Weekly full cluster backup
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: weekly-full-backup
+  namespace: velero
+spec:
+  schedule: "0 3 * * 0" # Weekly on Sunday at 3 AM
+  template:
+    ttl: 2160h0m0s # 90 days retention
+    includedNamespaces:
+      - "*"
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - kube-node-lease
+    includedResources:
+      - "*"
+    excludedResources:
+      - events
+      - events.events.k8s.io
+    labelSelector:
+      matchExpressions:
+        - key: velero.io/exclude-from-backup
+          operator: NotIn
+          values: ["true"]
+    includeClusterResources: true
+    defaultVolumesToFsBackup: true
+    storageLocation: default
+---
+# Monthly long-term backup
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: monthly-archive-backup
+  namespace: velero
+spec:
+  schedule: "0 4 1 * *" # Monthly on 1st at 4 AM
+  template:
+    ttl: 8760h0m0s # 365 days retention (1 year)
+    includedNamespaces:
+      - llm
+      - media-server
+      - n8n
+      - monitoring
+      - cert-manager
+      - flux-system
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - kube-node-lease
+      - velero
+    includedResources:
+      - "*"
+    excludedResources:
+      - events
+      - events.events.k8s.io
+      - replicasets
+      - replicasets.apps
+    labelSelector:
+      matchExpressions:
+        - key: velero.io/exclude-from-backup
+          operator: NotIn
+          values: ["true"]
+    includeClusterResources: true
+    defaultVolumesToFsBackup: true
+    storageLocation: default
+---
+# Critical data backup (more frequent for databases)
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: critical-data-backup
+  namespace: velero
+spec:
+  schedule: "0 */6 * * *" # Every 6 hours
+  template:
+    ttl: 168h0m0s # 7 days retention
+    includedNamespaces:
+      - n8n
+      - llm
+    excludedNamespaces: []
+    includedResources:
+      - persistentvolumes
+      - persistentvolumeclaims
+      - secrets
+      - configmaps
+      - statefulsets
+      - deployments
+    excludedResources:
+      - events
+      - events.events.k8s.io
+    labelSelector:
+      matchLabels:
+        backup.velero.io/critical: "true"
+    includeClusterResources: false
+    defaultVolumesToFsBackup: true
+    storageLocation: default
+---
+# Security components backup
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: security-backup
+  namespace: velero
+spec:
+  schedule: "0 1 * * *" # Daily at 1 AM
+  template:
+    ttl: 720h0m0s # 30 days retention
+    includedNamespaces:
+      - kubescape
+      - trivy-system
+      - cert-manager
+    excludedNamespaces: []
+    includedResources:
+      - "*"
+    excludedResources:
+      - events
+      - events.events.k8s.io
+    labelSelector:
+      matchExpressions:
+        - key: velero.io/exclude-from-backup
+          operator: NotIn
+          values: ["true"]
+    includeClusterResources: false
+    defaultVolumesToFsBackup: true
+    storageLocation: default
+---
+# Backup validation and cleanup policies
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: velero-backup-policies
+  namespace: velero
+data:
+  backup-policy.yaml: |
+    # Velero Backup Policies and Guidelines
+    
+    backup_schedules:
+      critical_data:
+        frequency: "every 6 hours"
+        retention: "7 days"
+        namespaces: ["n8n", "ai"]
+        description: "Critical application data"
+        
+      daily_backup:
+        frequency: "daily at 2 AM"
+        retention: "30 days"
+        namespaces: ["ai", "media-server", "n8n", "monitoring", "cert-manager", "flux-system"]
+        description: "Standard daily backup of all application namespaces"
+        
+      weekly_full:
+        frequency: "weekly on Sunday at 3 AM"
+        retention: "90 days"
+        namespaces: ["*"]
+        description: "Full cluster backup for disaster recovery"
+        
+      monthly_archive:
+        frequency: "monthly on 1st at 4 AM"
+        retention: "365 days"
+        namespaces: ["ai", "media-server", "n8n", "monitoring", "cert-manager", "flux-system"]
+        description: "Long-term archival backup"
+        
+      security_backup:
+        frequency: "daily at 1 AM"
+        retention: "30 days"
+        namespaces: ["kubescape", "trivy-system", "cert-manager"]
+        description: "Security components backup"
+    
+    backup_validation:
+      automated_restore_tests:
+        frequency: "monthly"
+        target_namespace: "backup-test"
+        tests:
+          - restore_pvc_data
+          - restore_secrets
+          - restore_configmaps
+          - validate_application_startup
+          
+      backup_integrity_checks:
+        frequency: "weekly"
+        checks:
+          - backup_completion_status
+          - backup_size_validation
+          - storage_location_accessibility
+          - retention_policy_compliance
+    
+    recovery_procedures:
+      disaster_recovery:
+        steps:
+          - "Restore infrastructure components first"
+          - "Restore persistent data"
+          - "Restore application configurations"
+          - "Validate application functionality"
+          - "Update DNS and ingress if needed"
+          
+      partial_recovery:
+        steps:
+          - "Identify affected namespace/application"
+          - "Create restore job for specific backup"
+          - "Validate restored data"
+          - "Restart affected services"
+    
+    monitoring:
+      prometheus_alerts:
+        - backup_job_failed
+        - backup_storage_full
+        - backup_retention_exceeded
+        - restore_job_failed
+        
+      grafana_dashboards:
+        - velero_backup_overview
+        - backup_success_rate
+        - storage_utilization
+        - recovery_time_metrics

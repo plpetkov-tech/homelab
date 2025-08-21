@@ -1,0 +1,23 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apps-monitoring
+  namespace: flux-system
+spec:
+  interval: 20m
+  timeout: 15m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/apps/base/monitoring
+  prune: true
+  wait: true
+  serviceAccountName: gotk-monitoring-reconciler
+  dependsOn:
+    - name: infrastructure-security-policies  # Changed from enrollment to policies (ingress only)
+  healthChecks:
+    - apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      name: kube-prometheus-stack
+      namespace: flux-system

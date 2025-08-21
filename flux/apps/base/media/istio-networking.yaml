@@ -1,0 +1,121 @@
+---
+# Media Services VirtualServices
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: deluge-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - deluge.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: deluge.media-server.svc.cluster.local
+        port:
+          number: 8112
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: jackett-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - jackett.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: jackett.media-server.svc.cluster.local
+        port:
+          number: 9117
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: jellyfin-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - jellyfin.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: jellyfin.media-server.svc.cluster.local
+        port:
+          number: 8096
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: radarr-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - radarr.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: radarr.media-server.svc.cluster.local
+        port:
+          number: 7878
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: sonarr-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - sonarr.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: sonarr.media-server.svc.cluster.local
+        port:
+          number: 8989
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: tubesync-vs
+  namespace: istio-system
+spec:
+  hosts:
+  - tubesync.dunde.live
+  gateways:
+  - istio-system/dunde-live-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: tubesync.media-server.svc.cluster.local
+        port:
+          number: 4848

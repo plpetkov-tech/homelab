@@ -1,0 +1,525 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: downloads-direct
+  namespace: media-server
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Gi
+  storageClassName: longhorn
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: downloads-complete
+  namespace: media-server
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Gi
+  storageClassName: longhorn
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: movies
+  namespace: media-server
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: longhorn
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shows
+  namespace: media-server
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Gi
+  storageClassName: longhorn
+  persistentVolumeReclaimPolicy: Retain
+---
+# Deluge StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: deluge
+  namespace: media-server
+spec:
+  serviceName: deluge
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deluge
+  template:
+    metadata:
+      labels:
+        app: deluge
+    spec:
+      containers:
+      - name: deluge
+        image: linuxserver/deluge@sha256:9de4b097e0cb5dceb5ef0aaa4deb2565101c65e7d06770a59151770750a54858 # {"$imagepolicy": "flux-system:deluge"}
+        env:
+        - name: TZ
+          value: "Europe/Athens"
+        - name: PUID
+          value: "0"
+        - name: PGID
+          value: "0"
+        - name: DELUGE_LOGLEVEL
+          value: "error"
+        resources:
+          limits:
+            memory: 2Gi
+          requests:
+            memory: 150Mi
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8112
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8112
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: downloads
+          mountPath: /downloads
+        - name: completed
+          mountPath: /completed
+      volumes:
+      - name: downloads
+        persistentVolumeClaim:
+          claimName: downloads-direct
+      - name: completed
+        persistentVolumeClaim:
+          claimName: downloads-complete
+  volumeClaimTemplates:
+  - metadata:
+      name: config
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 120Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: deluge
+  namespace: media-server
+spec:
+  ports:
+  - port: 8112
+    targetPort: 8112
+  selector:
+    app: deluge
+---
+# IngressRoute for deluge removed - replaced by Istio VirtualService
+# Original route: Host(`deluge.dunde.live`) -> service: deluge:8112
+---
+# Jellyfin StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: jellyfin
+  namespace: media-server
+spec:
+  serviceName: jellyfin
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jellyfin
+  template:
+    metadata:
+      labels:
+        app: jellyfin
+    spec:
+      containers:
+      - name: jellyfin
+        image: lscr.io/linuxserver/jellyfin:latest 
+        env:
+        - name: TZ
+          value: "Europe/Athens"
+        - name: PUID
+          value: "0"
+        - name: PGID
+          value: "0"
+        resources:
+          limits:
+            memory: 18Gi
+          requests:
+            memory: 4Gi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8096
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8096
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: cache
+          mountPath: /cache
+        - name: movies
+          mountPath: /mnt/films
+        - name: shows
+          mountPath: /mnt/shows
+      volumes:
+      - name: movies
+        persistentVolumeClaim:
+          claimName: movies
+      - name: shows
+        persistentVolumeClaim:
+          claimName: shows
+  volumeClaimTemplates:
+  - metadata:
+      name: config
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 15Gi
+  - metadata:
+      name: cache
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin
+  namespace: media-server
+spec:
+  ports:
+  - port: 8096
+    targetPort: 8096
+  selector:
+    app: jellyfin
+---
+# IngressRoute for jellyfin removed - replaced by Istio VirtualService
+# Original route: Host(`jellyfin.dunde.live`) -> service: jellyfin:8096
+---
+# Jackett StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: jackett
+  namespace: media-server
+spec:
+  serviceName: jackett
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jackett
+  template:
+    metadata:
+      labels:
+        app: jackett
+    spec:
+      containers:
+      - name: jackett
+        image: lscr.io/linuxserver/jackett:0.22.2315@sha256:a0622ddb066614f9e9257f0628fbb186a85f8c1d3e2be5a7be562f34bdc6a2e7 # {"$imagepolicy": "flux-system:jackett"}
+        env:
+        - name: TZ
+          value: "Europe/Athens"
+        - name: PUID
+          value: "0"
+        - name: PGID
+          value: "0"
+        resources:
+          limits:
+            memory: 1Gi
+          requests:
+            memory: 200Mi
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: downloads
+          mountPath: /downloads
+  volumeClaimTemplates:
+  - metadata:
+      name: config
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 120Mi
+  - metadata:
+      name: downloads
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 120Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jackett
+  namespace: media-server
+spec:
+  ports:
+  - port: 9117
+    targetPort: 9117
+  selector:
+    app: jackett
+---
+# IngressRoute for jackett removed - replaced by Istio VirtualService
+# Original route: Host(`jackett.dunde.live`) -> service: jackett:9117
+---
+# Radarr StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: radarr
+  namespace: media-server
+spec:
+  serviceName: radarr
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radarr
+  template:
+    metadata:
+      labels:
+        app: radarr
+    spec:
+      containers:
+      - name: radarr
+        image: lscr.io/linuxserver/radarr:5.26.2@sha256:ae89f05ad7023258730ed62f5fcca63aab1e27ee5adcca1edb55d716f7cef356 # {"$imagepolicy": "flux-system:radarr"}
+        env:
+        - name: TZ
+          value: "Europe/Athens"
+        - name: PUID
+          value: "0"
+        - name: PGID
+          value: "0"
+        resources:
+          limits:
+            memory: 2Gi
+          requests:
+            memory: 150Mi
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: movies
+          mountPath: /movies
+        - name: downloads
+          mountPath: /downloads
+        - name: completed
+          mountPath: /completed
+      volumes:
+      - name: movies
+        persistentVolumeClaim:
+          claimName: movies
+      - name: downloads
+        persistentVolumeClaim:
+          claimName: downloads-direct
+      - name: completed
+        persistentVolumeClaim:
+          claimName: downloads-complete
+  volumeClaimTemplates:
+  - metadata:
+      name: config
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 500Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: radarr
+  namespace: media-server
+spec:
+  ports:
+  - port: 7878
+    targetPort: 7878
+  selector:
+    app: radarr
+---
+# IngressRoute for radarr removed - replaced by Istio VirtualService
+# Original route: Host(`radarr.dunde.live`) -> service: radarr:7878
+---
+# Sonarr StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sonarr
+  namespace: media-server
+spec:
+  serviceName: sonarr
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sonarr
+  template:
+    metadata:
+      labels:
+        app: sonarr
+    spec:
+      containers:
+      - name: sonarr
+        image: lscr.io/linuxserver/sonarr:4.0.15@sha256:c0836f49c20000e603170dc95d74c2527e690d50309977d94fc171eaa49351a4 # {"$imagepolicy": "flux-system:sonarr"}
+        env:
+        - name: TZ
+          value: "Europe/Athens"
+        - name: PUID
+          value: "0"
+        - name: PGID
+          value: "0"
+        resources:
+          limits:
+            memory: 3Gi
+          requests:
+            memory: 200Mi
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: tv
+          mountPath: /tv
+        - name: downloads
+          mountPath: /downloads
+        - name: completed
+          mountPath: /completed
+      volumes:
+      - name: tv
+        persistentVolumeClaim:
+          claimName: shows
+      - name: downloads
+        persistentVolumeClaim:
+          claimName: downloads-direct
+      - name: completed
+        persistentVolumeClaim:
+          claimName: downloads-complete
+  volumeClaimTemplates:
+  - metadata:
+      name: config
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 120Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarr
+  namespace: media-server
+spec:
+  ports:
+  - port: 8989
+    targetPort: 8989
+  selector:
+    app: sonarr
+---
+# IngressRoute for sonarr removed - replaced by Istio VirtualService
+# Original route: Host(`sonarr.dunde.live`) -> service: sonarr:8989
+---
+# Tubesync StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tubesync
+  namespace: media-server
+spec:
+  serviceName: tubesync
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tubesync
+  template:
+    metadata:
+      labels:
+        app: tubesync
+    spec:
+      containers:
+      - name: tubesync
+        image: ghcr.io/meeb/tubesync@sha256:db3835f200a03560d0c88af5aa322644f957898771b819cefee9b5d4ed09bbfb # {"$imagepolicy": "flux-system:tubesync"}
+        env:
+        - name: TZ
+          value: "Europe/Athens"
+        - name: PUID
+          value: "0"
+        - name: PGID
+          value: "0"
+        resources:
+          limits:
+            memory: 2Gi
+          requests:
+            memory: 200Mi
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: downloads
+          mountPath: /downloads
+  volumeClaimTemplates:
+  - metadata:
+      name: config
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 500Mi
+  - metadata:
+      name: downloads
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 3Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tubesync
+  namespace: media-server
+spec:
+  ports:
+  - port: 4848
+    targetPort: 4848
+  selector:
+    app: tubesync
+---
+# IngressRoute for tubesync removed - replaced by Istio VirtualService
+# Original route: Host(`tubesync.dunde.live`) -> service: tubesync:4848

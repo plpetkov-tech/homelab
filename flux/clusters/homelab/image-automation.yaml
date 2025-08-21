@@ -1,0 +1,249 @@
+---
+# LinuxServer Images
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: jellyfin
+  namespace: flux-system
+spec:
+  image: lscr.io/linuxserver/jellyfin
+  interval: 12h
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: jellyfin
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: jellyfin
+  policy:
+    semver:
+      range: ">=10.0.0"
+  digestReflectionPolicy: IfNotPresent
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: jackett
+  namespace: flux-system
+spec:
+  image: lscr.io/linuxserver/jackett
+  interval: 12h
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: jackett
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: jackett
+  policy:
+    semver:
+      range: ">=0.22.0"
+  digestReflectionPolicy: IfNotPresent
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: radarr
+  namespace: flux-system
+spec:
+  image: lscr.io/linuxserver/radarr
+  interval: 12h
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: radarr
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: radarr
+  policy:
+    semver:
+      range: ">=5.0.0"
+  digestReflectionPolicy: IfNotPresent
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: sonarr
+  namespace: flux-system
+spec:
+  image: lscr.io/linuxserver/sonarr
+  interval: 12h
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: sonarr
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: sonarr
+  policy:
+    semver:
+      range: ">=4.0.0"
+  digestReflectionPolicy: IfNotPresent
+---
+# AI/ML Images
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: n8n
+  namespace: flux-system
+spec:
+  image: docker.io/n8nio/n8n
+  interval: 12h
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: n8n
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: n8n
+  policy:
+    semver:
+      range: ">=1.0.0"
+  digestReflectionPolicy: IfNotPresent
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: ollama
+  namespace: flux-system
+spec:
+  image: docker.io/ollama/ollama
+  interval: 12h
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: ollama
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: ollama
+  policy:
+    semver:
+      range: ">=0.3.0"
+  digestReflectionPolicy: IfNotPresent
+---
+# Hoarder Images
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: meilisearch
+  namespace: flux-system
+spec:
+  image: docker.io/getmeili/meilisearch
+  interval: 12h
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: meilisearch
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: meilisearch
+  policy:
+    semver:
+      range: ">=1.11.0"
+  digestReflectionPolicy: IfNotPresent
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: hoarder
+  namespace: flux-system
+spec:
+  image: ghcr.io/hoarder-app/hoarder
+  interval: 12h
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: hoarder
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: hoarder
+  policy:
+    semver:
+      range: ">=0.23.0"
+  digestReflectionPolicy: IfNotPresent
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageUpdateAutomation
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 15m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        email: fluxcdbot@users.noreply.github.com
+        name: fluxcdbot
+      messageTemplate: |
+        Automated image update
+
+        Automation name: {{ .AutomationObject }}
+
+        Files updated:
+        {{ range $filename, $_ := .Updated.Files -}}
+        - {{ $filename }}
+        {{ end -}}
+
+        Objects updated:
+        {{ range $resource, $_ := .Updated.Objects -}}
+        - {{ $resource.Kind }} {{ $resource.Name }}
+        {{ end -}}
+
+        Images updated:
+        {{ range .Updated.Images -}}
+        - {{.}}
+        {{ end -}}
+    push:
+      branch: flux-image-updates
+  update:
+    path: "./"
+    strategy: Setters
+---
+apiVersion: notification.toolkit.fluxcd.io/v1beta3
+kind: Provider
+metadata:
+  name: github
+  namespace: flux-system
+spec:
+  type: github
+  address: https://api.github.com/
+  secretRef:
+    name: github-token
+---
+apiVersion: notification.toolkit.fluxcd.io/v1beta3
+kind: Alert
+metadata:
+  name: image-updates
+  namespace: flux-system
+spec:
+  providerRef:
+    name: github
+  eventSeverity: info
+  eventSources:
+    - kind: ImageUpdateAutomation
+      name: flux-system
+  summary: "Automated image update completed"

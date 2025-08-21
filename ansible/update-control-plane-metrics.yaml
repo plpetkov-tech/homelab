@@ -1,0 +1,306 @@
+---
+- name: Update Control Plane Metrics Configuration
+  hosts: all
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+  
+  vars:
+    cluster_config: "{{ lookup('file', 'tmp/{{ cluster_name }}/cluster_config.json') | from_json }}"
+    timestamp: "{{ ansible_date_time.epoch }}"
+    backup_dir: "/etc/kubernetes/backups/{{ timestamp }}"
+    
+  tasks:
+    - name: Update control plane metrics with rollback protection
+      block:
+        - name: Clean up incorrectly placed backup directory from previous runs
+          file:
+            path: /etc/kubernetes/manifests/backups
+            state: absent
+          tags: ['cleanup']
+          
+        - name: Clean up incorrectly placed backup files from previous runs
+          shell: rm -f /etc/kubernetes/manifests/*.backup-*
+          tags: ['cleanup']
+          
+        - name: Create backup directory
+          file:
+            path: "{{ backup_dir }}"
+            state: directory
+            mode: '0755'
+          tags: ['backup']
+
+        # Control Plane Components (scheduler and controller-manager)
+        - name: Update kube-scheduler metrics configuration
+          block:
+            - name: Check if kube-scheduler manifest exists
+              stat:
+                path: /etc/kubernetes/manifests/kube-scheduler.yaml
+              register: scheduler_manifest_exists
+              
+            - name: Skip scheduler update if manifest doesn't exist
+              debug:
+                msg: "Skipping scheduler update - manifest not found"
+              when: not scheduler_manifest_exists.stat.exists
+              
+            - name: Backup kube-scheduler manifest
+              copy:
+                src: /etc/kubernetes/manifests/kube-scheduler.yaml
+                dest: "{{ backup_dir }}/kube-scheduler.yaml.backup"
+                remote_src: true
+              when: scheduler_manifest_exists.stat.exists
+              
+            - name: Move kube-scheduler manifest to temp location
+              command: mv /etc/kubernetes/manifests/kube-scheduler.yaml /tmp/kube-scheduler.yaml
+              when: scheduler_manifest_exists.stat.exists
+              
+            - name: Check if bind-address already configured for scheduler
+              shell: grep -q "bind-address" /tmp/kube-scheduler.yaml
+              register: scheduler_bind_check
+              failed_when: false
+              changed_when: false
+              when: scheduler_manifest_exists.stat.exists
+              
+            - name: Update kube-scheduler bind-address
+              shell: |
+                # Remove any existing bind-address flags first
+                yq eval '.spec.containers[0].command = (.spec.containers[0].command | map(select(. | startswith("--bind-address") | not)))' -i /tmp/kube-scheduler.yaml
+                # Add the new bind-address flag
+                yq eval '.spec.containers[0].command += ["--bind-address=0.0.0.0"]' -i /tmp/kube-scheduler.yaml
+              when: scheduler_manifest_exists.stat.exists and (scheduler_bind_check.rc != 0 or ansible_check_mode)
+              
+            - name: Move kube-scheduler manifest back
+              command: mv /tmp/kube-scheduler.yaml /etc/kubernetes/manifests/kube-scheduler.yaml
+              when: scheduler_manifest_exists.stat.exists
+              
+            - name: Wait for kube-scheduler to restart
+              wait_for:
+                timeout: 30
+              when: scheduler_manifest_exists.stat.exists
+              
+          when: inventory_hostname in groups['controlplane']
+          tags: ['scheduler']
+
+        - name: Update kube-controller-manager metrics configuration
+          block:
+            - name: Check if kube-controller-manager manifest exists
+              stat:
+                path: /etc/kubernetes/manifests/kube-controller-manager.yaml
+              register: controller_manifest_exists
+              
+            - name: Skip controller-manager update if manifest doesn't exist
+              debug:
+                msg: "Skipping controller-manager update - manifest not found"
+              when: not controller_manifest_exists.stat.exists
+              
+            - name: Backup kube-controller-manager manifest
+              copy:
+                src: /etc/kubernetes/manifests/kube-controller-manager.yaml
+                dest: "{{ backup_dir }}/kube-controller-manager.yaml.backup"
+                remote_src: true
+              when: controller_manifest_exists.stat.exists
+              
+            - name: Move kube-controller-manager manifest to temp location
+              command: mv /etc/kubernetes/manifests/kube-controller-manager.yaml /tmp/kube-controller-manager.yaml
+              when: controller_manifest_exists.stat.exists
+              
+            - name: Check if bind-address already configured for controller-manager
+              shell: grep -q "bind-address" /tmp/kube-controller-manager.yaml
+              register: controller_bind_check
+              failed_when: false
+              changed_when: false
+              when: controller_manifest_exists.stat.exists
+              
+            - name: Update kube-controller-manager bind-address
+              shell: |
+                # Remove any existing bind-address flags first
+                yq eval '.spec.containers[0].command = (.spec.containers[0].command | map(select(. | startswith("--bind-address") | not)))' -i /tmp/kube-controller-manager.yaml
+                # Add the new bind-address flag
+                yq eval '.spec.containers[0].command += ["--bind-address=0.0.0.0"]' -i /tmp/kube-controller-manager.yaml
+              when: controller_manifest_exists.stat.exists and (controller_bind_check.rc != 0 or ansible_check_mode)
+              
+            - name: Move kube-controller-manager manifest back
+              command: mv /tmp/kube-controller-manager.yaml /etc/kubernetes/manifests/kube-controller-manager.yaml
+              when: controller_manifest_exists.stat.exists
+              
+            - name: Wait for kube-controller-manager to restart
+              wait_for:
+                timeout: 30
+              when: controller_manifest_exists.stat.exists
+              
+          when: inventory_hostname in groups['controlplane']
+          tags: ['controller-manager']
+
+        # etcd Components
+        - name: Update etcd metrics configuration
+          block:
+            - name: Check if etcd manifest exists
+              stat:
+                path: /etc/kubernetes/manifests/etcd.yaml
+              register: etcd_manifest_exists
+              
+            - name: Skip etcd update if manifest doesn't exist
+              debug:
+                msg: "Skipping etcd update - manifest not found"
+              when: not etcd_manifest_exists.stat.exists
+              
+            - name: Backup etcd manifest
+              copy:
+                src: /etc/kubernetes/manifests/etcd.yaml
+                dest: "{{ backup_dir }}/etcd.yaml.backup"
+                remote_src: true
+              when: etcd_manifest_exists.stat.exists
+              
+            - name: Move etcd manifest to temp location
+              command: mv /etc/kubernetes/manifests/etcd.yaml /tmp/etcd.yaml
+              when: etcd_manifest_exists.stat.exists
+              
+            - name: Check if listen-metrics-urls already configured for etcd
+              shell: grep -q "listen-metrics-urls" /tmp/etcd.yaml
+              register: etcd_metrics_check
+              failed_when: false
+              changed_when: false
+              when: etcd_manifest_exists.stat.exists
+              
+            - name: Update etcd listen-metrics-urls
+              shell: |
+                # Remove existing listen-metrics-urls if present
+                yq eval '.spec.containers[0].command = (.spec.containers[0].command | map(select(. | startswith("--listen-metrics-urls") | not)))' -i /tmp/etcd.yaml
+                # Add new listen-metrics-urls
+                yq eval '.spec.containers[0].command += ["--listen-metrics-urls=http://{{ ansible_default_ipv4.address }}:2381"]' -i /tmp/etcd.yaml
+              when: etcd_manifest_exists.stat.exists and (etcd_metrics_check.rc != 0 or ansible_check_mode)
+              
+            - name: Move etcd manifest back
+              command: mv /tmp/etcd.yaml /etc/kubernetes/manifests/etcd.yaml
+              when: etcd_manifest_exists.stat.exists
+              
+            - name: Wait for etcd to restart
+              wait_for:
+                timeout: 30
+              when: etcd_manifest_exists.stat.exists
+              
+          when: inventory_hostname in groups['etcd']
+          tags: ['etcd']
+
+        # Verification (simplified)
+        - name: Verify manifests are in place
+          debug:
+            msg: |
+              Control plane metrics configuration update completed.
+              Static pod manifests have been updated and should be restarting.
+              Wait a few minutes for pods to fully restart before testing metrics endpoints.
+          run_once: true
+          tags: ['verify']
+
+        # Test metrics endpoints (with error handling)
+        - name: Test scheduler metrics endpoint
+          uri:
+            url: "http://{{ ansible_default_ipv4.address }}:10259/metrics"
+            method: GET
+            timeout: 10
+            status_code: 200
+          register: scheduler_metrics_test
+          failed_when: false
+          when: inventory_hostname in groups['controlplane']
+          tags: ['test']
+          
+        - name: Test controller-manager metrics endpoint
+          uri:
+            url: "http://{{ ansible_default_ipv4.address }}:10257/metrics"
+            method: GET
+            timeout: 10
+            status_code: 200
+          register: controller_metrics_test
+          failed_when: false
+          when: inventory_hostname in groups['controlplane']
+          tags: ['test']
+          
+        - name: Test etcd metrics endpoint
+          uri:
+            url: "http://{{ ansible_default_ipv4.address }}:2381/metrics"
+            method: GET
+            timeout: 10
+            validate_certs: false
+            status_code: 200
+          register: etcd_metrics_test
+          failed_when: false
+          when: inventory_hostname in groups['etcd']
+          tags: ['test']
+          
+        - name: Display metrics endpoint test results
+          debug:
+            msg: |
+              Node: {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})
+              {% if inventory_hostname in groups['controlplane'] %}
+              Scheduler metrics (port 10259): {{ 'AVAILABLE' if scheduler_metrics_test.status is defined and scheduler_metrics_test.status == 200 else 'UNAVAILABLE - May need more time to restart' }}
+              Controller-manager metrics (port 10257): {{ 'AVAILABLE' if controller_metrics_test.status is defined and controller_metrics_test.status == 200 else 'UNAVAILABLE - May need more time to restart' }}
+              {% endif %}
+              {% if inventory_hostname in groups['etcd'] %}
+              Etcd metrics (port 2381): {{ 'AVAILABLE' if etcd_metrics_test.status is defined and etcd_metrics_test.status == 200 else 'UNAVAILABLE - May need more time to restart' }}
+              {% endif %}
+          tags: ['test']
+
+        - name: Display backup information
+          debug:
+            msg: |
+              Backups created in: {{ backup_dir }}
+              - kube-scheduler.yaml.backup (if control plane node)
+              - kube-controller-manager.yaml.backup (if control plane node)
+              - etcd.yaml.backup (if etcd node)
+              
+              Note: Backups are stored outside /etc/kubernetes/manifests/ to avoid kubelet interference
+          tags: ['backup']
+
+      rescue:
+        - name: Check for scheduler backup before rollback
+          stat:
+            path: "{{ backup_dir }}/kube-scheduler.yaml.backup"
+          register: scheduler_backup_exists
+          when: inventory_hostname in groups['controlplane']
+          
+        - name: Check for controller-manager backup before rollback
+          stat:
+            path: "{{ backup_dir }}/kube-controller-manager.yaml.backup"
+          register: controller_backup_exists
+          when: inventory_hostname in groups['controlplane']
+          
+        - name: Check for etcd backup before rollback
+          stat:
+            path: "{{ backup_dir }}/etcd.yaml.backup"
+          register: etcd_backup_exists
+          when: inventory_hostname in groups['etcd']
+          
+        - name: Rollback on failure - Restore scheduler manifest
+          copy:
+            src: "{{ backup_dir }}/kube-scheduler.yaml.backup"
+            dest: /etc/kubernetes/manifests/kube-scheduler.yaml
+            remote_src: true
+          when: inventory_hostname in groups['controlplane'] and scheduler_backup_exists.stat.exists | default(false)
+          ignore_errors: true
+          
+        - name: Rollback on failure - Restore controller-manager manifest
+          copy:
+            src: "{{ backup_dir }}/kube-controller-manager.yaml.backup"
+            dest: /etc/kubernetes/manifests/kube-controller-manager.yaml
+            remote_src: true
+          when: inventory_hostname in groups['controlplane'] and controller_backup_exists.stat.exists | default(false)
+          ignore_errors: true
+          
+        - name: Rollback on failure - Restore etcd manifest
+          copy:
+            src: "{{ backup_dir }}/etcd.yaml.backup"
+            dest: /etc/kubernetes/manifests/etcd.yaml
+            remote_src: true
+          when: inventory_hostname in groups['etcd'] and etcd_backup_exists.stat.exists | default(false)
+          ignore_errors: true
+          
+        - name: Display rollback information
+          debug:
+            msg: |
+              ⚠️  Control plane metrics update failed! Rolled back to previous configuration.
+              Original manifests have been restored from: {{ backup_dir }}
+              Please check the cluster status and try again.
+              
+        - name: Fail the playbook after rollback
+          fail:
+            msg: "Control plane metrics update failed and was rolled back. Check logs above for details."

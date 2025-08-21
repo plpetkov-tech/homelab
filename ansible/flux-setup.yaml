@@ -1,0 +1,165 @@
+---
+- name: Install Flux v2 GitOps Toolkit
+  hosts: controlplane[0]
+  gather_facts: false
+  vars:
+    cluster_config: "{{ lookup('file', 'tmp/{{ cluster_name }}/cluster_config.json') | from_json }}"
+    flux_version: "{{ lookup('env', 'FLUX_VERSION') }}"
+    kubeconfig_file: "{{ lookup('env', 'HOME') }}/.kube/{{ cluster_config.kubeconfig_file_name }}"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_file }}"
+  tasks:
+    - name: Check if Flux is already installed
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Namespace
+        name: flux-system
+      register: flux_namespace
+      failed_when: false
+      delegate_to: localhost
+
+    - name: Display Flux installation status
+      debug:
+        msg: "Flux namespace {{ 'already exists' if flux_namespace.resources | default([]) | length > 0 else 'not found, proceeding with installation' }}"
+
+    - name: Create flux-system namespace if it doesn't exist
+      kubernetes.core.k8s:
+        name: flux-system
+        api_version: v1
+        kind: Namespace
+        state: present
+      when: flux_namespace.resources | default([]) | length == 0
+      delegate_to: localhost
+
+    - name: Download Flux CLI binary
+      get_url:
+        url: "https://github.com/fluxcd/flux2/releases/download/v{{ flux_version }}/flux_{{ flux_version }}_linux_amd64.tar.gz"
+        dest: "/tmp/flux_{{ flux_version }}_linux_amd64.tar.gz"
+        mode: '0644'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Extract Flux CLI binary
+      unarchive:
+        src: "/tmp/flux_{{ flux_version }}_linux_amd64.tar.gz"
+        dest: "/tmp"
+        remote_src: false
+        creates: "/tmp/flux"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Install Flux CLI binary
+      copy:
+        src: "/tmp/flux"
+        dest: "/usr/local/bin/flux"
+        mode: '0755'
+        owner: root
+        group: root
+      become: true
+      delegate_to: localhost
+      run_once: true
+
+    - name: Verify Flux CLI installation
+      command: flux version --client
+      register: flux_cli_version
+      delegate_to: localhost
+      run_once: true
+      changed_when: false
+
+    - name: Display Flux CLI version
+      debug:
+        msg: "Flux CLI version: {{ flux_cli_version.stdout }}"
+
+    - name: Check Kubernetes cluster compatibility
+      command: flux check --pre
+      register: flux_precheck
+      delegate_to: localhost
+      run_once: true
+      changed_when: false
+      failed_when: flux_precheck.rc != 0
+
+    - name: Install Flux components to the cluster
+      command: >
+        flux install 
+        --namespace=flux-system 
+        --network-policy=false 
+        --components-extra=image-reflector-controller,image-automation-controller
+      register: flux_install
+      delegate_to: localhost
+      run_once: true
+      when: flux_namespace.resources | default([]) | length == 0
+      changed_when: "'✔ Flux installed successfully' in flux_install.stdout"
+
+    - name: Wait for Flux controllers to be ready
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        namespace: flux-system
+        label_selectors:
+          - "app.kubernetes.io/part-of=flux"
+        wait: true
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 300
+      register: flux_deployments
+      delegate_to: localhost
+
+    - name: Verify Flux installation
+      command: flux check
+      register: flux_check
+      delegate_to: localhost
+      run_once: true
+      changed_when: false
+
+    - name: Display Flux installation verification
+      debug:
+        msg: "{{ flux_check.stdout_lines }}"
+
+    - name: Create GitRepository source example (commented out)
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: source.toolkit.fluxcd.io/v1
+          kind: GitRepository
+          metadata:
+            name: flux-system
+            namespace: flux-system
+          spec:
+            interval: 5m
+            url: https://github.com/example/fleet-infra
+            ref:
+              branch: main
+            # secretRef:
+            #   name: flux-system
+      when: false  # Set to true if you want to create an example GitRepository
+      delegate_to: localhost
+
+    - name: Display Flux setup completion
+      debug:
+        msg: |
+          Flux v{{ flux_version }} has been successfully installed!
+          
+          Next steps to configure GitOps:
+          1. Create a Git repository for your cluster configuration
+          2. Create a GitRepository source: 
+             kubectl create secret generic flux-system --from-literal=username=<git-username> --from-literal=password=<git-token> -n flux-system
+             flux create source git flux-system --url=<your-git-repo> --branch=main --secret-ref=flux-system
+          3. Create Kustomization to apply your manifests:
+             flux create kustomization flux-system --source=flux-system --path="./clusters/{{ cluster_name }}" --prune=true --interval=5m
+          
+          Useful commands:
+          - flux get sources git: List GitRepository sources
+          - flux get kustomizations: List Kustomizations
+          - flux logs: View Flux controller logs
+          - flux suspend/resume: Suspend or resume reconciliation
+
+    - name: Clean up temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/flux_{{ flux_version }}_linux_amd64.tar.gz"
+        - "/tmp/flux"
+      delegate_to: localhost
+      run_once: true

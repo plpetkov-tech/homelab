@@ -1,0 +1,71 @@
+---
+# Main Istio Gateway for all traffic
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: dunde-live-gateway
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  # HTTP server (redirect to HTTPS)
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "dunde.live"
+    - "*.dunde.live"
+    tls:
+      httpsRedirect: true
+  # HTTPS server with TLS termination (internal services)
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: dunde-live-istio-tls
+    hosts:
+    - "dunde.live"
+    - "*.dunde.live"
+---
+# Optional: Gateway API Gateway for future-proofing
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: dunde-live-gateway-api
+  namespace: istio-system
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+spec:
+  gatewayClassName: istio
+  listeners:
+  - name: http
+    hostname: "*.dunde.live"
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All
+  - name: https
+    hostname: "*.dunde.live"
+    port: 443
+    protocol: HTTPS
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: dunde-live-tls
+        kind: Secret
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+# GatewayClass for Istio (if not auto-created)
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: istio
+spec:
+  controllerName: istio.io/gateway-controller

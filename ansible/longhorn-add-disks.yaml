@@ -1,0 +1,119 @@
+---
+- name: Add Storage Disks to Longhorn
+  hosts: controlplane[0]
+  gather_facts: false
+  vars:
+    cluster_config: "{{ lookup('file', 'tmp/{{ cluster_name }}/cluster_config.json') | from_json }}"
+    longhorn_nodes: "{{ lookup('file', 'tmp/{{ cluster_name }}/longhorn_nodes.json') | from_json }}"
+    kubeconfig_file: "{{ lookup('env', 'HOME') }}/.kube/{{ cluster_config.kubeconfig_file_name }}"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_file }}"
+  tasks:
+    - name: Verify Longhorn is ready
+      debug:
+        msg: "Skipping wait - Longhorn should be ready if this playbook is running"
+
+    - name: Get Longhorn nodes
+      kubernetes.core.k8s_info:
+        api_version: longhorn.io/v1beta2
+        kind: Node
+        namespace: longhorn-system
+      register: longhorn_k8s_nodes
+      delegate_to: localhost
+
+    - name: Display current Longhorn nodes
+      debug:
+        msg: "Found Longhorn nodes: {{ longhorn_k8s_nodes.resources | map(attribute='metadata.name') | list }}"
+
+    - name: Debug longhorn_nodes variable structure
+      debug:
+        var: longhorn_nodes
+
+    - name: Build disk configuration for each node with secondary disks
+      set_fact:
+        node_disk_config: |
+          {%- set node_name = item.cluster_name + '-' + item.node_class + '-' + item.index|string -%}
+          {%- set disk_specs = {
+              ('default-disk-' + node_name): {
+                'allowScheduling': true,
+                'evictionRequested': false,
+                'path': '/var/lib/longhorn/',
+                'storageReserved': 10737418240,
+                'tags': []
+              }
+            } -%}
+          {%- for disk in item.secondary_disks -%}
+            {%- set disk_name = 'longhorn-disk-' + item.node_class + '-' + item.index|string + '-' + loop.index0|string -%}
+            {%- set _ = disk_specs.update({
+                disk_name: {
+                  'allowScheduling': true,
+                  'evictionRequested': false,
+                  'path': disk.mount_path + '/longhorn-data',
+                  'storageReserved': (disk.size_gb * 0.03 * 1073741824)|int,
+                  'tags': ['diskType.additional', 'nodeClass.' + item.node_class, 'datastore.' + disk.datastore]
+                }
+              }) -%}
+          {%- endfor -%}
+          {{ disk_specs | to_json }}
+      loop: "{{ longhorn_nodes.nodes_with_secondary_disks }}"
+      register: disk_configs_raw
+
+    - name: Add disks to Longhorn nodes
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: longhorn.io/v1beta2
+          kind: Node
+          metadata:
+            name: "{{ item.item.cluster_name }}-{{ item.item.node_class }}-{{ item.item.index }}"
+            namespace: longhorn-system
+          spec:
+            disks: "{{ item.ansible_facts.node_disk_config | from_json }}"
+      loop: "{{ disk_configs_raw.results }}"
+      when: (item.item.cluster_name + '-' + item.item.node_class + '-' + item.item.index|string) in (longhorn_k8s_nodes.resources | map(attribute='metadata.name') | list)
+      delegate_to: localhost
+
+    - name: Wait for disks to be added and detected
+      pause:
+        seconds: 30
+        prompt: "Waiting for Longhorn to detect new disks..."
+
+    - name: Get updated Longhorn nodes with disk info
+      kubernetes.core.k8s_info:
+        api_version: longhorn.io/v1beta2
+        kind: Node
+        namespace: longhorn-system
+      register: updated_longhorn_nodes
+      delegate_to: localhost
+
+    - name: Build list of nodes with secondary disks for filtering
+      set_fact:
+        nodes_with_disks: >-
+          [{% for node in longhorn_nodes.nodes_with_secondary_disks -%}
+            "{{ node.cluster_name }}-{{ node.node_class }}-{{ node.index }}"
+            {%- if not loop.last -%},{%- endif -%}
+          {%- endfor %}]
+
+    - name: Display disk information for nodes with secondary disks
+      debug:
+        msg: |
+          Node: {{ item.metadata.name }}
+          Disks: {{ item.spec.disks.keys() | list if item.spec.disks is defined else 'No disks configured' }}
+          Status: {{ item.status.diskStatus if item.status.diskStatus is defined else 'Status not available' }}
+      loop: "{{ updated_longhorn_nodes.resources }}"
+      when: item.metadata.name in nodes_with_disks
+
+    - name: Calculate total storage capacity
+      set_fact:
+        total_secondary_storage_gb: "{{ longhorn_nodes.nodes_with_secondary_disks | map(attribute='secondary_disks') | flatten | map(attribute='size_gb') | map('int') | sum }}"
+        node_count_with_disks: "{{ longhorn_nodes.nodes_with_secondary_disks | length }}"
+
+    - name: Display storage summary
+      debug:
+        msg: |
+          Longhorn Storage Setup Complete:
+          - {{ node_count_with_disks }} nodes with secondary storage disks
+          - Total raw secondary storage: {{ total_secondary_storage_gb }}GB
+          - Estimated usable storage with 3x replication: {{ (total_secondary_storage_gb|int / 3) }}GB
+          - Dynamic disk configuration applied to all eligible nodes
+          - Disk paths auto-configured based on Terraform metadata

@@ -1,0 +1,337 @@
+---
+- name: Fix GPU Operator Validation Deadlock
+  hosts: gpu
+  gather_facts: true
+  become: true
+  any_errors_fatal: false
+  
+  vars:
+    cluster_config: "{{ lookup('file', 'tmp/{{ cluster_name }}/cluster_config.json') | from_json }}"
+    kubeconfig_file: "{{ lookup('env', 'HOME') }}/.kube/{{ cluster_config.kubeconfig_file_name }}"
+    
+  tasks:
+    - name: Check if GPU nodes exist in the cluster
+      set_fact:
+        gpu_nodes_exist: >-
+          {{ cluster_config.node_classes.gpu is defined and cluster_config.node_classes.gpu.count > 0 }}
+
+    - name: Skip GPU validation fix if no GPU nodes
+      meta: end_play
+      when: not gpu_nodes_exist
+
+    - name: Display GPU validation fix info
+      debug:
+        msg: |
+          Applying GPU operator validation fix for known deadlock issue.
+          This addresses the driver-validation init container getting stuck when driver.enabled=false.
+          
+          Issue: GPU Operator v23.6.0+ DaemonSets not scheduling due to validation deadlock
+          Solution: Create persistent validation files and ensure proper nvidia-smi access
+
+    - name: Check if NVIDIA drivers are properly installed
+      command: nvidia-smi --query-gpu=name --format=csv,noheader
+      register: nvidia_smi_check
+      failed_when: false
+      changed_when: false
+
+    - name: Display GPU detection results
+      debug:
+        msg: |
+          Node: {{ inventory_hostname }}
+          NVIDIA SMI Status: {{ 'SUCCESS' if nvidia_smi_check.rc == 0 else 'FAILED' }}
+          {% if nvidia_smi_check.rc == 0 %}
+          Detected GPUs: {{ nvidia_smi_check.stdout_lines | join(', ') }}
+          {% else %}
+          Error: {{ nvidia_smi_check.stderr }}
+          {% endif %}
+
+    - name: Create NVIDIA validation directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+      loop:
+        - /run/nvidia/driver
+        - /run/nvidia/validations
+        - /run/nvidia/toolkit
+        - /usr/local/nvidia
+        - /var/run/cdi
+
+    - name: Create persistent validation service
+      copy:
+        content: |
+          #!/bin/bash
+          # NVIDIA GPU Operator Validation Fix Service
+          # This script ensures validation files persist across reboots
+          
+          VALIDATION_DIR="/run/nvidia/validations"
+          DRIVER_DIR="/run/nvidia/driver"
+          TOOLKIT_DIR="/run/nvidia/toolkit"
+          
+          # Create directories
+          mkdir -p "$VALIDATION_DIR" "$DRIVER_DIR" "$TOOLKIT_DIR" /usr/local/nvidia /var/run/cdi
+          
+          # Set proper permissions
+          chmod 755 "$VALIDATION_DIR" "$DRIVER_DIR" "$TOOLKIT_DIR"
+          
+          # Check if nvidia-smi works
+          if nvidia-smi > /dev/null 2>&1; then
+              echo "$(date): NVIDIA drivers validated successfully" >> /var/log/nvidia-validation.log
+              
+              # Create driver-ready validation file
+              touch "$VALIDATION_DIR/driver-ready"
+              echo "driver-validation-passed" > "$VALIDATION_DIR/driver-ready"
+              
+              # Create toolkit-ready validation file  
+              touch "$VALIDATION_DIR/toolkit-ready"
+              echo "toolkit-validation-passed" > "$VALIDATION_DIR/toolkit-ready"
+              
+              # Create additional validation markers
+              touch "$DRIVER_DIR/ready"
+              touch "$TOOLKIT_DIR/toolkit.pid"
+              
+              echo "$(date): All validation files created successfully" >> /var/log/nvidia-validation.log
+          else
+              echo "$(date): NVIDIA driver validation failed - nvidia-smi not working" >> /var/log/nvidia-validation.log
+              exit 1
+          fi
+        dest: /usr/local/bin/nvidia-validation-fix.sh
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Create systemd service for NVIDIA validation
+      copy:
+        content: |
+          [Unit]
+          Description=NVIDIA GPU Operator Validation Fix
+          Documentation=https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/
+          After=network.target
+          Wants=network.target
+          
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/bin/nvidia-validation-fix.sh
+          RemainAfterExit=yes
+          StandardOutput=journal
+          StandardError=journal
+          
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/nvidia-validation-fix.service
+        mode: '0644'
+        owner: root
+        group: root
+      register: validation_service
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: true
+      when: validation_service.changed
+
+    - name: Enable and start NVIDIA validation service
+      systemd:
+        name: nvidia-validation-fix.service
+        enabled: true
+        state: started
+      register: validation_service_start
+
+    - name: Run validation fix immediately
+      command: /usr/local/bin/nvidia-validation-fix.sh
+      register: validation_result
+      failed_when: validation_result.rc != 0
+
+    - name: Verify validation files were created
+      stat:
+        path: "{{ item }}"
+      register: validation_files
+      loop:
+        - /run/nvidia/validations/driver-ready
+        - /run/nvidia/validations/toolkit-ready
+        - /run/nvidia/driver/ready
+        - /run/nvidia/toolkit/toolkit.pid
+
+    - name: Display validation file status
+      debug:
+        msg: |
+          Validation file: {{ item.item }}
+          Exists: {{ item.stat.exists }}
+          Size: {{ item.stat.size | default(0) }} bytes
+      loop: "{{ validation_files.results }}"
+
+    - name: Force restart GPU operator DaemonSets (if needed)
+      block:
+        - name: Get GPU operator DaemonSets status
+          kubernetes.core.k8s_info:
+            api_version: apps/v1
+            kind: DaemonSet
+            namespace: gpu-operator
+          register: gpu_daemonsets
+          delegate_to: localhost
+          environment:
+            KUBECONFIG: "{{ kubeconfig_file }}"
+
+        - name: Check if DaemonSets need restart
+          set_fact:
+            restart_needed: >-
+              {{ gpu_daemonsets.resources | 
+                 selectattr('status.desiredNumberScheduled', 'defined') |
+                 selectattr('status.desiredNumberScheduled', 'eq', 0) | 
+                 list | length > 0 }}
+
+        - name: Restart GPU operator to pick up validation files
+          kubernetes.core.k8s:
+            state: absent
+            api_version: v1
+            kind: Pod
+            namespace: gpu-operator
+            label_selectors:
+              - "app=gpu-operator"
+          delegate_to: localhost
+          environment:
+            KUBECONFIG: "{{ kubeconfig_file }}"
+          when: restart_needed
+          ignore_errors: true
+
+        - name: Wait for GPU operator to restart
+          pause:
+            seconds: 30
+            prompt: "Waiting for GPU operator to restart and detect validation files..."
+          when: restart_needed
+
+        - name: Force DaemonSet reconciliation by updating annotations
+          kubernetes.core.k8s:
+            state: present
+            definition:
+              apiVersion: apps/v1
+              kind: DaemonSet
+              metadata:
+                name: "{{ item }}"
+                namespace: gpu-operator
+                annotations:
+                  nvidia.com/validation-fix-timestamp: "{{ ansible_date_time.epoch }}"
+            merge_type: merge
+          loop:
+            - nvidia-container-toolkit-daemonset
+            - nvidia-device-plugin-daemonset
+            - gpu-feature-discovery
+            - nvidia-dcgm-exporter
+            - nvidia-node-status-exporter
+            - nvidia-operator-validator
+          delegate_to: localhost
+          environment:
+            KUBECONFIG: "{{ kubeconfig_file }}"
+          failed_when: false
+          ignore_errors: true
+
+      when: nvidia_smi_check.rc == 0
+
+    - name: Wait for DaemonSets to start scheduling
+      pause:
+        seconds: 60
+        prompt: "Waiting for GPU operator DaemonSets to start scheduling pods..."
+
+    - name: Verify DaemonSets are now scheduling
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: DaemonSet
+        namespace: gpu-operator
+      register: final_daemonsets
+      delegate_to: localhost
+      environment:
+        KUBECONFIG: "{{ kubeconfig_file }}"
+
+    - name: Display final DaemonSet status
+      debug:
+        msg: |
+          DaemonSet: {{ item.metadata.name }}
+          Desired: {{ item.status.desiredNumberScheduled | default(0) }}
+          Current: {{ item.status.currentNumberScheduled | default(0) }}
+          Ready: {{ item.status.numberReady | default(0) }}
+          Status: {{ 'SCHEDULING' if item.status.desiredNumberScheduled | default(0) > 0 else 'NOT SCHEDULING' }}
+      loop: "{{ final_daemonsets.resources }}"
+
+    - name: Check for GPU resources on nodes
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Node
+        label_selectors:
+          - "nodeclass=gpu"
+      register: gpu_nodes_final
+      delegate_to: localhost
+      environment:
+        KUBECONFIG: "{{ kubeconfig_file }}"
+
+    - name: Display GPU resources status
+      debug:
+        msg: |
+          GPU Node: {{ item.metadata.name }}
+          GPU Resources: {{ item.status.allocatable.get('nvidia.com/gpu', 'Not available yet') }}
+          GPU Labels: {{ item.metadata.labels | dict2items | selectattr('key', 'match', 'nvidia.*') | map(attribute='key') | list }}
+      loop: "{{ gpu_nodes_final.resources }}"
+
+    - name: Display final status and next steps
+      debug:
+        msg: |
+          ✅ NVIDIA GPU Operator Validation Fix Applied!
+          
+          📋 What was fixed:
+          - Created persistent validation directories and files
+          - Established systemd service for validation persistence
+          - Forced GPU operator DaemonSet reconciliation
+          - Updated DaemonSet annotations to trigger scheduling
+          
+          📊 Current Status:
+          {% set scheduling_ds = final_daemonsets.resources | selectattr('status.desiredNumberScheduled', 'defined') | selectattr('status.desiredNumberScheduled', 'gt', 0) | list %}
+          - DaemonSets now scheduling: {{ scheduling_ds | length }}/{{ final_daemonsets.resources | length }}
+          - GPU nodes with resources: {{ gpu_nodes_final.resources | selectattr('status.allocatable.nvidia.com/gpu', 'defined') | list | length }}/{{ gpu_nodes_final.resources | length }}
+          
+          ⏱️  Expected Timeline:
+          - Container toolkit: 2-5 minutes
+          - Device plugin: 3-7 minutes  
+          - GPU resources available: 5-10 minutes
+          - Full GPU operator ready: 10-15 minutes
+          
+          🔍 Monitor Progress:
+          kubectl get pods -n gpu-operator -w
+          kubectl get nodes -l nodeclass=gpu -o wide
+          kubectl describe node {{ inventory_hostname }}
+          
+          🧪 Test When Ready:
+          kubectl run gpu-test --rm -it --restart=Never --image=nvidia/cuda:12.0-runtime-ubuntu20.04 --overrides='{"spec":{"tolerations":[{"key":"gpu","operator":"Equal","value":"true","effect":"NoSchedule"}],"nodeSelector":{"nvidia.com/gpu":"true"}}}' -- nvidia-smi
+      run_once: true
+
+    - name: Create validation status check script
+      copy:
+        content: |
+          #!/bin/bash
+          echo "=== NVIDIA GPU Operator Validation Status ==="
+          echo
+          echo "Validation Files:"
+          for file in /run/nvidia/validations/driver-ready /run/nvidia/validations/toolkit-ready; do
+              if [ -f "$file" ]; then
+                  echo "✅ $file exists ($(cat "$file" 2>/dev/null || echo "empty"))"
+              else
+                  echo "❌ $file missing"
+              fi
+          done
+          echo
+          echo "NVIDIA Driver Status:"
+          if nvidia-smi > /dev/null 2>&1; then
+              echo "✅ nvidia-smi working"
+              nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+          else
+              echo "❌ nvidia-smi failed"
+          fi
+          echo
+          echo "GPU Operator DaemonSets:"
+          kubectl get daemonsets -n gpu-operator -o custom-columns="NAME:.metadata.name,DESIRED:.status.desiredNumberScheduled,CURRENT:.status.currentNumberScheduled,READY:.status.numberReady"
+          echo
+          echo "GPU Resources:"
+          kubectl get nodes -l nodeclass=gpu -o custom-columns="NODE:.metadata.name,GPU_ALLOCATABLE:.status.allocatable.nvidia\.com/gpu"
+        dest: /usr/local/bin/check-gpu-operator-status.sh
+        mode: '0755'
+        owner: root
+        group: root

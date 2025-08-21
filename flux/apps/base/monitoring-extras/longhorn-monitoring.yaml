@@ -1,0 +1,59 @@
+---
+# Service for Longhorn Manager metrics
+apiVersion: v1
+kind: Service
+metadata:
+  name: longhorn-manager-metrics
+  namespace: longhorn-system
+  labels:
+    app: longhorn-manager
+spec:
+  selector:
+    app: longhorn-manager
+  ports:
+  - name: manager
+    port: 9500
+    targetPort: 9500
+    protocol: TCP
+---
+# ServiceMonitor for Longhorn Manager
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: longhorn-manager
+  namespace: monitoring
+  labels:
+    app: longhorn-manager
+spec:
+  selector:
+    matchLabels:
+      app: longhorn-manager
+  namespaceSelector:
+    matchNames:
+    - longhorn-system
+  endpoints:
+  - port: manager
+    interval: 30s
+    path: /metrics
+    honorLabels: true
+---
+# ServiceMonitor for Longhorn Instance Manager
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor  
+metadata:
+  name: longhorn-instance-manager
+  namespace: monitoring
+  labels:
+    app: longhorn-instance-manager
+spec:
+  selector:
+    matchLabels:
+      longhorn.io/component: instance-manager
+  namespaceSelector:
+    matchNames:
+    - longhorn-system
+  endpoints:
+  - port: manager
+    interval: 30s
+    path: /metrics
+    honorLabels: true

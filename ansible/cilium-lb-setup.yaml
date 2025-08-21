@@ -1,0 +1,78 @@
+- name: Configure Cilium Load Balancer on Kubernetes Cluster
+  hosts: controlplane[0]
+  gather_facts: false
+  tags:
+    - cilium_lb_setup
+  vars:
+    cluster_config: "{{ lookup('file', 'tmp/{{ cluster_name }}/cluster_config.json') | from_json }}"
+  tasks:
+
+    - name: Generate Cilium Load Balancer IP Pool configuration
+      ansible.builtin.template:
+        src: helpers/cilium_lb_configs.yaml.j2
+        dest: "/tmp/cilium_lb_configs.yaml"
+      vars:
+        ipv4_lb_cidrs: "{{ cluster_config.networking.ipv4.lb_cidrs }}"
+        ipv6_lb_cidrs: "{{ cluster_config.networking.ipv6.lb_cidrs }}"
+      delegate_to: localhost
+      tags:
+        - cilium_lb_configs
+
+    - name: Apply Cilium Load Balancer IP Pool configuration
+      ansible.builtin.shell:
+        cmd: kubectl apply -f /tmp/cilium_lb_configs.yaml
+      args:
+        executable: /bin/bash
+      delegate_to: localhost
+      environment:
+        KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/{{ cluster_name }}.yml"
+      tags:
+        - cilium_lb_configs_apply
+
+    - name: Create Cilium L2 Announcement Policy
+      ansible.builtin.template:
+        src: helpers/cilium_l2_policy.yaml.j2
+        dest: "/tmp/cilium_l2_policy.yaml"
+      delegate_to: localhost
+      tags:
+        - cilium_l2_policy
+
+    - name: Apply Cilium L2 Announcement Policy
+      ansible.builtin.shell:
+        cmd: kubectl apply -f /tmp/cilium_l2_policy.yaml
+      args:
+        executable: /bin/bash
+      delegate_to: localhost
+      environment:
+        KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/{{ cluster_name }}.yml"
+      tags:
+        - cilium_l2_policy_apply
+
+    - name: Wait for Cilium Load Balancer IP Pool to be created
+      ansible.builtin.shell:
+        cmd: kubectl get ciliumloadbalancerippool
+      args:
+        executable: /bin/bash
+      delegate_to: localhost
+      environment:
+        KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/{{ cluster_name }}.yml"
+      tags:
+        - cilium_lb_wait
+
+    - name: Verify Cilium Load Balancer Pool has available IPs
+      ansible.builtin.shell:
+        cmd: kubectl get ciliumloadbalancerippool default-pool -o jsonpath='{.status.conditions[?(@.type=="cilium.io/IPsAvailable")].message}'
+      args:
+        executable: /bin/bash
+      delegate_to: localhost
+      environment:
+        KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/{{ cluster_name }}.yml"
+      register: available_ips
+      tags:
+        - cilium_lb_wait
+
+    - name: Display available IPs
+      debug:
+        msg: "Cilium Load Balancer Pool has {{ available_ips.stdout }} available IPs"
+      tags:
+        - cilium_lb_wait

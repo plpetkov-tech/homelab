@@ -1,0 +1,184 @@
+---
+# StatefulSet testing Longhorn with RWO
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: longhorn-rwo-test
+  namespace: default
+spec:
+  serviceName: "longhorn-rwo-service"
+  replicas: 2
+  selector:
+    matchLabels:
+      app: longhorn-rwo-test
+  template:
+    metadata:
+      labels:
+        app: longhorn-rwo-test
+    spec:
+      containers:
+      - name: test-container
+        image: alpine:latest
+        command: ["/bin/sh"]
+        args: ["-c", "while true; do echo 'RWO Test - Pod: '$(hostname)' - Time: '$(date)' - Data: '$(dd if=/dev/urandom bs=1024 count=1 2>/dev/null | base64 | head -c 50) > /data/test-$(hostname)-$(date +%s).txt; cat /data/test-$(hostname)-*.txt | tail -5; sleep 30; done"]
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+  volumeClaimTemplates:
+  - metadata:
+      name: data-volume
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 1Gi
+
+---
+# Service for Longhorn RWO StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: longhorn-rwo-service
+  namespace: default
+spec:
+  clusterIP: None
+  selector:
+    app: longhorn-rwo-test
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+# StatefulSet testing RWX StorageClass
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: longhorn-rwx-test
+  namespace: default
+spec:
+  serviceName: "longhorn-rwx-service"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: longhorn-rwx-test
+  template:
+    metadata:
+      labels:
+        app: longhorn-rwx-test
+    spec:
+      containers:
+      - name: test-container
+        image: alpine:latest
+        command: ["/bin/sh"]
+        args: ["-c", "while true; do echo 'RWX Test - Pod: '$(hostname)' - Time: '$(date)' - Data: '$(dd if=/dev/urandom bs=1024 count=1 2>/dev/null | base64 | head -c 50) > /shared/test-$(hostname)-$(date +%s).txt; echo 'Files from all pods:'; ls -la /shared/test-*.txt 2>/dev/null || echo 'No files yet'; cat /shared/test-*.txt 2>/dev/null | tail -10; sleep 30; done"]
+        volumeMounts:
+        - name: shared-data
+          mountPath: /shared
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+  volumeClaimTemplates:
+  - metadata:
+      name: shared-data
+    spec:
+      accessModes: ["ReadWriteMany"]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 2Gi
+
+---
+# Service for Longhorn RWX StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: longhorn-rwx-service
+  namespace: default
+spec:
+  clusterIP: None
+  selector:
+    app: longhorn-rwx-test
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+# StatefulSet testing RWX with GPU slice
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: gpu-rwx-test
+  namespace: default
+spec:
+  serviceName: "gpu-rwx-service"
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gpu-rwx-test
+  template:
+    metadata:
+      labels:
+        app: gpu-rwx-test
+    spec:
+      containers:
+      - name: gpu-test-container
+        image: tensorflow/tensorflow:latest-gpu
+        command: ["/bin/bash"]
+        args: ["-c", "while true; do echo 'GPU+RWX Test - Pod: '$(hostname)' - Time: '$(date)' - GPU: '$(nvidia-smi --query-gpu=name --format=csv,noheader,nounits) > /workspace/gpu-test-$(hostname)-$(date +%s).txt; python3 -c 'import tensorflow as tf; import numpy as np; data=np.random.rand(1000,1000); result=tf.reduce_sum(tf.square(data)).numpy(); print(f\"TensorFlow GPU computation result: {result}\")' >> /workspace/gpu-test-$(hostname)-$(date +%s).txt; echo 'GPU files from all pods:'; ls -la /workspace/gpu-test-*.txt 2>/dev/null || echo 'No GPU files yet'; tail -5 /workspace/gpu-test-*.txt 2>/dev/null; sleep 60; done"]
+        volumeMounts:
+        - name: gpu-shared-data
+          mountPath: /workspace
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+            nvidia.com/gpu: "1"  # GPU slice - half GPU
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+            nvidia.com/gpu: "1"    # Full GPU limit
+        env:
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: "all"
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: "compute,utility"
+      tolerations:
+      - key: gpu
+        value: "true"
+        effect: NoSchedule
+  volumeClaimTemplates:
+  - metadata:
+      name: gpu-shared-data
+    spec:
+      accessModes: ["ReadWriteMany"]
+      storageClassName: longhorn
+      resources:
+        requests:
+          storage: 5Gi
+
+---
+# Service for GPU RWX StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpu-rwx-service
+  namespace: default
+spec:
+  clusterIP: None
+  selector:
+    app: gpu-rwx-test
+  ports:
+  - port: 8888
+    targetPort: 8888

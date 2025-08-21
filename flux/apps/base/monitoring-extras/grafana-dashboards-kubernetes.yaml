@@ -1,0 +1,34 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: grafana-dashboards-kubernetes
+  namespace: flux-system
+spec:
+  interval: 1h
+  ref:
+    branch: master
+  url: https://github.com/dotdc/grafana-dashboards-kubernetes
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: grafana-dashboards-kubernetes
+  namespace: flux-system
+spec:
+  interval: 1h
+  retryInterval: 2m
+  timeout: 10m
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: grafana-dashboards-kubernetes
+  path: "./"
+  targetNamespace: monitoring
+  patches:
+  - patch: |
+      - op: add
+        path: /metadata/labels/grafana_dashboard
+        value: "1"
+    target:
+      kind: ConfigMap

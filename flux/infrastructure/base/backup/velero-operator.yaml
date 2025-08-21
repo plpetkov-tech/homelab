@@ -1,0 +1,180 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: vmware-tanzu
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://vmware-tanzu.github.io/helm-charts/
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: velero
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: velero
+      version: '7.2.1'
+      sourceRef:
+        kind: HelmRepository
+        name: vmware-tanzu
+        namespace: flux-system
+      interval: 12h
+  targetNamespace: velero
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    image:
+      repository: velero/velero
+      tag: v1.15.0
+      
+    initContainers:
+      - name: velero-plugin-for-aws
+        image: velero/velero-plugin-for-aws:v1.11.0
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - mountPath: /target
+            name: plugins
+            
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+        
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    
+    serviceMonitor:
+      enabled: true
+      additionalLabels: {}
+      
+    configuration:
+      # Cloudflare R2 S3-compatible configuration
+      backupStorageLocation:
+        - name: default
+          provider: aws
+          bucket: velero
+          caCert: ""
+          config:
+            region: eeur
+            s3ForcePathStyle: true
+            s3Url: https://53587b8cdbdaf645a8a44b214776d21b.r2.cloudflarestorage.com
+            
+      volumeSnapshotLocation:
+        - name: default
+          provider: aws
+          config:
+            region: eeur
+            
+      # Backup defaults
+      backupRetentionPeriod: 720h # 30 days
+      
+      # Upload progress monitoring
+      uploadProgressReporter: 
+        interval: 30s
+        
+      # Excluded namespaces from backups
+      excludedNamespaces:
+        - kube-system
+        - kube-public
+        - kube-node-lease
+        
+    credentials:
+      useSecret: true
+      name: velero-credentials
+      secretContents:
+        # This will be populated by the secret we created
+        cloud: ""
+        
+    backupsEnabled: true
+    snapshotsEnabled: false
+    
+    # Deploy node agent for volume backups
+    deployNodeAgent: true
+    
+    nodeAgent:
+      podVolumePath: /var/lib/kubelet/pods
+      privileged: true
+      priorityClassName: ""
+      podSecurityContext:
+        runAsUser: 0
+      securityContext:
+        privileged: true
+        runAsUser: 0
+        capabilities:
+          add:
+          - SYS_ADMIN
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+          
+    # Security context
+    securityContext:
+      runAsUser: 10000
+      runAsGroup: 10000
+      runAsNonRoot: true
+      fsGroup: 10000
+      
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 10000
+      runAsGroup: 10000
+      capabilities:
+        drop:
+        - ALL
+        
+    # Metrics configuration
+    metrics:
+      enabled: true
+      scrapeInterval: 30s
+      scrapeTimeout: 10s
+      
+    # Log level
+    logLevel: info
+    logFormat: text
+    
+    # Pod annotations
+    podAnnotations:
+      backup.velero.io/backup-volumes: ""
+      
+    # Pod labels
+    podLabels:
+      app.kubernetes.io/component: backup
+      
+    # Service account
+    serviceAccount:
+      server:
+        create: true
+        name: velero
+        annotations: {}
+        labels: {}
+        
+    rbac:
+      create: true
+      clusterAdministrator: true
+      
+    # Cleanup job
+    cleanUpCRDs: false
