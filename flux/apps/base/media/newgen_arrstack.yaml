@@ -312,7 +312,7 @@ spec:
     spec:
       containers:
       - name: radarr
-        image: lscr.io/linuxserver/radarr:5.26.2@sha256:c2adf66bafefa781401d07d358e399c476bdffb9a179a2780bb465bda8a55a51 # {"$imagepolicy": "flux-system:radarr"}
+        image: lscr.io/linuxserver/radarr:5.27.5@sha256:3ebb31bce86870dbcc15a5db3fba8864e302310cb2adb70476b0b64c1b3dc6dc # {"$imagepolicy": "flux-system:radarr"}
         env:
         - name: TZ
           value: "Europe/Athens"
