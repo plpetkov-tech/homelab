@@ -245,7 +245,7 @@ spec:
     spec:
       containers:
       - name: jackett
-        image: lscr.io/linuxserver/jackett:0.24.90@sha256:c3ac0793c222c211f21bc4f7fdeef84d61157fca7768a3cdd7c1040449ea2a82 # {"$imagepolicy": "flux-system:jackett"}
+        image: lscr.io/linuxserver/jackett:0.24.95@sha256:fa1598851a2c365da12ff565cc66f42bcaee1500318ef8001e13dfcc48f0f3aa # {"$imagepolicy": "flux-system:jackett"}
         env:
         - name: TZ
           value: "Europe/Athens"
