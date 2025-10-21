@@ -245,7 +245,7 @@ spec:
     spec:
       containers:
       - name: jackett
-        image: lscr.io/linuxserver/jackett:0.22.2321@sha256:c292a9527b2f8d0e9fbb6b7f43cf22f8429b41c7e78aed7b901b98cf4bcbd445 # {"$imagepolicy": "flux-system:jackett"}
+        image: lscr.io/linuxserver/jackett:0.24.166@sha256:332ccbcc6ec5dd6b77420686113003e851e7b96a321d4a20a042f2df6ef4215f # {"$imagepolicy": "flux-system:jackett"}
         env:
         - name: TZ
           value: "Europe/Athens"
@@ -312,7 +312,7 @@ spec:
     spec:
       containers:
       - name: radarr
-        image: lscr.io/linuxserver/radarr:5.26.2@sha256:c2adf66bafefa781401d07d358e399c476bdffb9a179a2780bb465bda8a55a51 # {"$imagepolicy": "flux-system:radarr"}
+        image: lscr.io/linuxserver/radarr:5.28.0@sha256:fae2aafa6ecace3524fc79d102f5bfd25fb151caed6a454cee46479236ac33bf # {"$imagepolicy": "flux-system:radarr"}
         env:
         - name: TZ
           value: "Europe/Athens"

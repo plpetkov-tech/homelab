@@ -119,7 +119,7 @@ spec:
     spec:
       containers:
       - name: meilisearch
-        image: docker.io/getmeili/meilisearch:v1.18.0@sha256:a66ac20819e33193c351164fea63fe892fdfdf2fb89ae26b35e67bf14c0f7e2a # {"$imagepolicy": "flux-system:meilisearch"}
+        image: docker.io/getmeili/meilisearch:v1.24.0@sha256:d991eb07331e9d1f9cec7bc0f9523fd5d51aee3b223d997e0e66206361952056 # {"$imagepolicy": "flux-system:meilisearch"}
         ports:
         - containerPort: 7700
         env:
@@ -176,7 +176,7 @@ spec:
     spec:
       containers:
       - name: hoarder
-        image: ghcr.io/hoarder-app/hoarder:0.26.0@sha256:f575a34ed3f8975225c156786442f177846126cf27d7fd37350f3af23c549d22 # {"$imagepolicy": "flux-system:hoarder"}
+        image: ghcr.io/hoarder-app/hoarder:0.27.1@sha256:abd7d6b11b1b8fa3593d1971f886a74850ba8d6a99291218b150207d5a60378e # {"$imagepolicy": "flux-system:hoarder"}
         ports:
         - containerPort: 3000
         envFrom:
@@ -211,6 +211,3 @@ spec:
   ports:
   - port: 3000
     targetPort: 3000
----
-# IngressRoute for hoarder removed - replaced by Istio VirtualService
-# Original route: Host(`hoarder.dunde.live`) -> service: hoarder:3000
