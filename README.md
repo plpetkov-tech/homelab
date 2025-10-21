@@ -31,11 +31,12 @@ Each node class is independently scalable with different resource profiles, stor
 - Longhorn distributed block storage 
 - External etcd cluster for maximum data safety
 
-**Platform Layer** 🎛️ 
+**Platform Layer** 🎛️
 - Istio service mesh in ambient mode (zero sidecar overhead)
 - Flux v2 GitOps with SOPS age-encrypted secrets
 - Cert-manager with Let's Encrypt automation
 - Velero backup operator
+- Renovate bot for automated dependency updates
 
 **Observability** 👁️
 - Prometheus + Grafana with 30+ dashboards
@@ -167,6 +168,19 @@ ccr fix-gpu-operator      # Fix GPU operator validation issues
 ```
 
 All commands include validation, detailed logging, and rollback capabilities.
+
+## Dependency Management 🔄
+
+This repository uses [Renovate Bot](https://docs.renovatebot.com/) to automatically keep dependencies up-to-date:
+
+- **Helm Charts**: Automatic updates for all 17 HelmRelease resources
+- **Terraform Providers**: Proxmox and Unifi provider version tracking
+- **Container Images**: Flux components and system images with digest pinning
+- **GitHub Actions**: Workflow dependency updates
+
+Renovate runs daily at 2am UTC and creates grouped pull requests for review. See [docs/RENOVATE.md](docs/RENOVATE.md) for complete setup and configuration details.
+
+Application container images (Jellyfin, Radarr, Sonarr, n8n, etc.) are managed by Flux's built-in image automation.
 
 ## Credits 🙏
 

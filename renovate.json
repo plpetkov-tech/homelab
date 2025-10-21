@@ -1,0 +1,196 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":enablePreCommit",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Europe/Sofia",
+  "schedule": [
+    "after 10pm every weekday",
+    "before 5am every weekday",
+    "every weekend"
+  ],
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Renovate Dashboard - Homelab Dependencies",
+  "dependencyDashboardHeader": "This issue lists Renovate updates and detected dependencies. Read the [Dependency Dashboard](https://docs.renovatebot.com/key-concepts/dashboard/) docs to learn more.",
+  "suppressNotifications": ["prIgnoreNotification"],
+  "rebaseWhen": "conflicted",
+  "commitBodyTable": true,
+  "labels": ["dependencies", "renovate"],
+  "prConcurrentLimit": 5,
+  "prCreation": "immediate",
+  "prHourlyLimit": 0,
+  "automerge": false,
+  "platformAutomerge": false,
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**",
+    "**/.terraform/**"
+  ],
+  "packageRules": [
+    {
+      "description": "Group all Helm chart updates together",
+      "groupName": "Helm Charts",
+      "matchDatasources": ["helm"],
+      "matchManagers": ["flux"],
+      "schedule": ["after 10pm on sunday"],
+      "commitMessageTopic": "Helm chart {{depName}}",
+      "commitMessageExtra": "to {{#if isSingleVersion}}{{newVersion}}{{else}}{{#if newValue}}{{{newValue}}}{{else}}{{{newDigestShort}}}{{/if}}{{/if}}",
+      "separateMinorPatch": true
+    },
+    {
+      "description": "Group Istio charts together",
+      "groupName": "Istio",
+      "matchDatasources": ["helm"],
+      "matchPackagePatterns": ["^istio"],
+      "schedule": ["after 10pm on sunday"],
+      "commitMessageTopic": "Istio"
+    },
+    {
+      "description": "Group monitoring stack updates",
+      "groupName": "Monitoring Stack",
+      "matchDatasources": ["helm"],
+      "matchPackagePatterns": [
+        "kube-prometheus-stack",
+        "prometheus-operator",
+        "grafana",
+        "loki",
+        "alloy"
+      ],
+      "schedule": ["after 10pm on sunday"]
+    },
+    {
+      "description": "Group Terraform provider updates",
+      "groupName": "Terraform Providers",
+      "matchDatasources": ["terraform-provider"],
+      "matchManagers": ["terraform"],
+      "schedule": ["after 10pm on saturday"],
+      "commitMessageTopic": "Terraform provider {{depName}}",
+      "separateMinorPatch": false
+    },
+    {
+      "description": "Group Flux system component updates",
+      "groupName": "Flux System Components",
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": ["^ghcr.io/fluxcd/"],
+      "schedule": ["after 10pm on saturday"],
+      "commitMessageTopic": "Flux components",
+      "automerge": false
+    },
+    {
+      "description": "Group CloudNativePG updates",
+      "groupName": "CloudNativePG",
+      "matchPackagePatterns": ["cloudnative-pg", "cnpg"],
+      "schedule": ["after 10pm on sunday"]
+    },
+    {
+      "description": "Auto-merge patch updates for stable charts",
+      "matchDatasources": ["helm"],
+      "matchUpdateTypes": ["patch"],
+      "matchPackagePatterns": [
+        "cert-manager",
+        "reflector",
+        "k8tz"
+      ],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Separate major version updates for manual review",
+      "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "renovate", "major-update"],
+      "prPriority": 10,
+      "commitMessagePrefix": "MAJOR: ",
+      "automerge": false
+    },
+    {
+      "description": "Pin container image digests for security",
+      "matchDatasources": ["docker"],
+      "pinDigests": true
+    },
+    {
+      "description": "GitHub Actions version updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "pinDigests": true,
+      "schedule": ["after 10pm on saturday"]
+    },
+    {
+      "description": "Security vulnerability updates get high priority",
+      "matchDatasources": ["docker", "helm", "terraform-provider"],
+      "labels": ["security", "renovate"],
+      "prPriority": 20,
+      "assignees": ["plpetkov-tech"]
+    }
+  ],
+  "regexManagers": [
+    {
+      "description": "Update container image tags in Kubernetes manifests",
+      "fileMatch": [
+        "(^|/)kubernetes/.+\\.ya?ml(\\.j2)?$",
+        "(^|/)flux/.+\\.ya?ml(\\.j2)?$"
+      ],
+      "matchStrings": [
+        "(?<depName>.*?):(?<currentValue>.*?)@(?<currentDigest>sha256:[a-f0-9]+)",
+        "image:\\s+['\"]?(?<depName>[^:]+):(?<currentValue>[^@'\"\\s]+)(@(?<currentDigest>sha256:[a-f0-9]+))?['\"]?",
+        "image:\\s+['\"]?(?<depName>ghcr\\.io/[^:]+):(?<currentValue>v?[0-9]+\\.[0-9]+\\.[0-9]+)(@(?<currentDigest>sha256:[a-f0-9]+))?['\"]?"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Update Terraform versions in comments or variables",
+      "fileMatch": [
+        "(^|/)terraform/.+\\.tf$"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+?) depName=(?<depName>[^\\s]+?)(?: versioning=(?<versioning>[^\\s]+?))?\\s+version\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
+    },
+    {
+      "description": "Update Velero plugin versions in Terraform",
+      "fileMatch": ["(^|/)terraform/nodes\\.tf$"],
+      "matchStrings": [
+        "velero/velero-plugin-for-aws:v(?<currentValue>[0-9.]+)"
+      ],
+      "depNameTemplate": "velero/velero-plugin-for-aws",
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "flux": {
+    "fileMatch": [
+      "(^|/)flux/.+\\.ya?ml$"
+    ]
+  },
+  "terraform": {
+    "fileMatch": [
+      "(^|/)terraform/.+\\.tf$"
+    ]
+  },
+  "kubernetes": {
+    "fileMatch": [
+      "(^|/)kubernetes/.+\\.ya?ml$",
+      "(^|/)flux/.+\\.ya?ml$"
+    ]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update container images in Ansible playbooks and templates",
+      "fileMatch": [
+        "(^|/)ansible/.+\\.ya?ml$",
+        "(^|/)ansible/.+\\.j2$"
+      ],
+      "matchStrings": [
+        "image:\\s+['\"]?(?<depName>[^:]+):(?<currentValue>[^@'\"\\s]+)(@(?<currentDigest>sha256:[a-f0-9]+))?['\"]?"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "osvVulnerabilityAlerts": true
+}

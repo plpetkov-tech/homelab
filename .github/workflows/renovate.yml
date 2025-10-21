@@ -1,0 +1,53 @@
+---
+name: Renovate
+
+on:
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: "Dry-Run"
+        default: "false"
+        required: false
+      logLevel:
+        description: "Log-Level"
+        default: "debug"
+        required: false
+  schedule:
+    # Run every day at 2am UTC
+    - cron: "0 2 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/renovate.yml"
+      - "renovate.json"
+
+jobs:
+  renovate:
+    name: Renovate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Token
+        uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: "${{ secrets.RENOVATE_APP_ID }}"
+          private-key: "${{ secrets.RENOVATE_APP_PRIVATE_KEY }}"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: "${{ steps.app-token.outputs.token }}"
+
+      - name: Renovate
+        uses: renovatebot/github-action@v41.0.7
+        env:
+          # Use GitHub App token for authentication
+          RENOVATE_TOKEN: "${{ steps.app-token.outputs.token }}"
+          # Set log level based on input or default
+          LOG_LEVEL: "${{ github.event.inputs.logLevel || 'info' }}"
+        with:
+          configurationFile: renovate.json
+          token: "${{ steps.app-token.outputs.token }}"
+          mount-docker-socket: true
+          renovate-version: "latest"
