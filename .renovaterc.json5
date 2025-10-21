@@ -1,0 +1,6 @@
+// This file is for local Renovate CLI testing
+// It extends the main renovate.json configuration
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["local>plpetkov-tech/homelab:renovate.json"]
+}
