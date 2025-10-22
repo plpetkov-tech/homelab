@@ -68,7 +68,7 @@ spec:
     
     image:
       repository: aquasec/trivy-operator
-      tag: 0.25.0
+      tag: 0.29.0@sha256:933516010c7ef3d020b84206d0bd87fc92ef09c23c901e9f6d001098c4d4cc5b
       pullPolicy: IfNotPresent
       
     trivyOperator:
