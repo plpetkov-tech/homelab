@@ -73,7 +73,7 @@ spec:
     spec:
       containers:
       - name: deluge
-        image: linuxserver/deluge@sha256:9de4b097e0cb5dceb5ef0aaa4deb2565101c65e7d06770a59151770750a54858 # {"$imagepolicy": "flux-system:deluge"}
+        image: linuxserver/deluge@sha256:c31bcf9266522cc9d00f0238fa2153181ad6ead11a87cd42eb09bf4a02395661 # {"$imagepolicy": "flux-system:deluge"}
         env:
         - name: TZ
           value: "Europe/Athens"
