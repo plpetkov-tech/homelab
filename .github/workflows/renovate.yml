@@ -44,8 +44,16 @@ jobs:
         env:
           # Use GitHub App token for authentication
           RENOVATE_TOKEN: "${{ steps.app-token.outputs.token }}"
+          # Repository to renovate
+          RENOVATE_REPOSITORIES: "${{ github.repository }}"
           # Set log level based on input or default
           LOG_LEVEL: "${{ github.event.inputs.logLevel || 'info' }}"
+          # Dry run mode
+          RENOVATE_DRY_RUN: "${{ github.event.inputs.dryRun || 'false' }}"
+          # Platform
+          RENOVATE_PLATFORM: "github"
+          # Require config
+          RENOVATE_REQUIRE_CONFIG: "required"
         with:
           configurationFile: renovate.json
           token: "${{ steps.app-token.outputs.token }}"
