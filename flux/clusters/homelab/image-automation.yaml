@@ -10,7 +10,7 @@ spec:
   image: lscr.io/linuxserver/jellyfin
   interval: 12h
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImagePolicy
 metadata:
   name: jellyfin
@@ -32,7 +32,7 @@ spec:
   image: lscr.io/linuxserver/jackett
   interval: 12h
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImagePolicy
 metadata:
   name: jackett
@@ -54,7 +54,7 @@ spec:
   image: lscr.io/linuxserver/radarr
   interval: 12h
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImagePolicy
 metadata:
   name: radarr
@@ -76,7 +76,7 @@ spec:
   image: lscr.io/linuxserver/sonarr
   interval: 12h
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImagePolicy
 metadata:
   name: sonarr
@@ -99,7 +99,7 @@ spec:
   image: docker.io/n8nio/n8n
   interval: 12h
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImagePolicy
 metadata:
   name: n8n
@@ -121,7 +121,7 @@ spec:
   image: docker.io/ollama/ollama
   interval: 12h
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImagePolicy
 metadata:
   name: ollama
@@ -145,7 +145,7 @@ spec:
   image: docker.io/getmeili/meilisearch
   interval: 12h
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImagePolicy
 metadata:
   name: meilisearch
@@ -167,7 +167,7 @@ spec:
   image: ghcr.io/hoarder-app/hoarder
   interval: 12h
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImagePolicy
 metadata:
   name: hoarder
