@@ -1,7 +1,7 @@
 ---
 # LinuxServer Images
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository
 metadata:
   name: jellyfin
@@ -23,7 +23,7 @@ spec:
       range: ">=10.0.0"
   digestReflectionPolicy: IfNotPresent
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository
 metadata:
   name: jackett
@@ -45,7 +45,7 @@ spec:
       range: ">=0.22.0"
   digestReflectionPolicy: IfNotPresent
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository
 metadata:
   name: radarr
@@ -67,7 +67,7 @@ spec:
       range: ">=5.0.0"
   digestReflectionPolicy: IfNotPresent
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository
 metadata:
   name: sonarr
@@ -90,7 +90,7 @@ spec:
   digestReflectionPolicy: IfNotPresent
 ---
 # AI/ML Images
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository
 metadata:
   name: n8n
@@ -112,7 +112,7 @@ spec:
       range: ">=1.0.0"
   digestReflectionPolicy: IfNotPresent
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository
 metadata:
   name: ollama
@@ -136,7 +136,7 @@ spec:
 ---
 # Hoarder Images
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository
 metadata:
   name: meilisearch
@@ -158,7 +158,7 @@ spec:
       range: ">=1.11.0"
   digestReflectionPolicy: IfNotPresent
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository
 metadata:
   name: hoarder
