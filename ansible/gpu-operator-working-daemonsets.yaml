@@ -50,7 +50,7 @@
                   effect: NoSchedule
                 containers:
                 - name: nvidia-container-toolkit-ctr
-                  image: nvcr.io/nvidia/k8s/container-toolkit:v1.17.8-ubuntu20.04
+                  image: nvcr.io/nvidia/k8s/container-toolkit:v1.17.9-ubuntu20.04
                   command:
                   - /bin/bash
                   - -c
