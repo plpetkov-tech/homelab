@@ -25,7 +25,7 @@ spec:
   chart:
     spec:
       chart: base
-      version: "1.26.2"
+      version: "1.26.6"
       sourceRef:
         kind: HelmRepository
         name: istio
@@ -115,7 +115,7 @@ spec:
   chart:
     spec:
       chart: cni
-      version: "1.26.2"
+      version: "1.26.6"
       sourceRef:
         kind: HelmRepository
         name: istio
@@ -154,7 +154,7 @@ spec:
   chart:
     spec:
       chart: ztunnel
-      version: "1.26.2"
+      version: "1.26.6"
       sourceRef:
         kind: HelmRepository
         name: istio
@@ -191,7 +191,7 @@ spec:
   chart:
     spec:
       chart: gateway
-      version: "1.26.2"
+      version: "1.26.6"
       sourceRef:
         kind: HelmRepository
         name: istio
