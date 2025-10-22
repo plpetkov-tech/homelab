@@ -553,7 +553,7 @@
                 nodeSelector:
                   nodeclass: gpu
                 containers:
-                - image: nvcr.io/nvidia/k8s-device-plugin:v0.17.2
+                - image: nvcr.io/nvidia/k8s-device-plugin:v0.18.0
                   name: nvidia-device-plugin-ctr
                   args:
                   - "--device-discovery-strategy=nvml"
