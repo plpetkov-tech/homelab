@@ -1,0 +1,319 @@
+---
+# This playbook sets up the gamma volume group on the Proxmox host
+# It uses disk IDs instead of device names for idempotency
+# This playbook is designed to connect directly to the Proxmox host
+#
+# Usage:
+#   ansible-playbook -i "proxmox-host," ansible/proxmox-gamma-vg-setup.yaml \
+#     -e "gamma_disk_ids=['ata-ADATA_SU750_2M382L2A9BFX','ata-ADATA_SU750_2M382LQA92UP','ata-ADATA_SU750_2M3829QAK7PX','ata-ADATA_SU750_2M38292AA61X']"
+#
+# Or use a pattern to auto-discover disks:
+#   ansible-playbook -i "proxmox-host," ansible/proxmox-gamma-vg-setup.yaml \
+#     -e "gamma_disk_pattern='ata-ADATA_SU750.*'"
+#
+# To find your disk IDs on the Proxmox host, run:
+#   ssh root@proxmox-host "ls -la /dev/disk/by-id/ | grep -v part"
+
+- name: Setup Gamma Volume Group on Proxmox Host
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    vg_name: "gamma"
+    pe_size: "4M"
+    thin_pool_name: "data"
+    thin_pool_size: "95%FREE"
+    proxmox_storage_type: "lvmthin"
+
+  tasks:
+    - name: Validate that disk IDs or pattern is provided
+      assert:
+        that:
+          - (gamma_disk_ids is defined and gamma_disk_ids | length > 0) or (gamma_disk_pattern is defined and gamma_disk_pattern | length > 0)
+        fail_msg: |
+          You must provide either:
+          - A list of disk IDs via gamma_disk_ids, or
+          - A disk pattern via gamma_disk_pattern
+
+          To find disk IDs, run on Proxmox host:
+          ls -la /dev/disk/by-id/ | grep -v part
+
+    - name: Discover disks by pattern if specified
+      block:
+        - name: Find all disk IDs matching pattern
+          find:
+            paths: /dev/disk/by-id
+            patterns: "{{ gamma_disk_pattern }}"
+            file_type: link
+            excludes: "*-part*"
+          register: discovered_disk_files
+          when: gamma_disk_pattern is defined and gamma_disk_pattern | length > 0
+
+        - name: Extract disk IDs from discovered files
+          set_fact:
+            gamma_disk_ids: "{{ discovered_disk_files.files | map(attribute='path') | map('basename') | list }}"
+          when:
+            - gamma_disk_pattern is defined and gamma_disk_pattern | length > 0
+            - discovered_disk_files.files | length > 0
+
+        - name: Fail if no disks found matching pattern
+          fail:
+            msg: "No disks found matching pattern: {{ gamma_disk_pattern }}"
+          when:
+            - gamma_disk_pattern is defined and gamma_disk_pattern | length > 0
+            - discovered_disk_files.files | length == 0
+
+    - name: Display disks that will be used
+      debug:
+        msg: |
+          Volume Group: {{ vg_name }}
+          Disks to be used ({{ gamma_disk_ids | length }}):
+          {% for disk in gamma_disk_ids %}
+          - /dev/disk/by-id/{{ disk }}
+          {% endfor %}
+
+    - name: Check if all disks exist
+      stat:
+        path: "/dev/disk/by-id/{{ item }}"
+      register: disk_existence
+      loop: "{{ gamma_disk_ids }}"
+      failed_when: not disk_existence.stat.exists
+
+    - name: Get real device paths for the disks
+      stat:
+        path: "/dev/disk/by-id/{{ item }}"
+      register: disk_stats
+      loop: "{{ gamma_disk_ids }}"
+
+    - name: Create list of disk-by-id paths
+      set_fact:
+        disk_by_id_paths: "{{ gamma_disk_ids | map('regex_replace', '^(.*)$', '/dev/disk/by-id/\\1') | list }}"
+
+    - name: Display device mapping
+      debug:
+        msg: |
+          Disk ID to Device mapping:
+          {% for result in disk_stats.results %}
+          - {{ result.item }} -> {{ result.stat.lnk_target }}
+          {% endfor %}
+
+    - name: Check if VG already exists
+      command: vgs --noheadings -o vg_name {{ vg_name }}
+      register: vg_check
+      changed_when: false
+      failed_when: false
+
+    - name: Set VG existence fact
+      set_fact:
+        vg_exists: "{{ vg_check.rc == 0 }}"
+
+    - name: Get current PVs if VG exists
+      command: pvs --noheadings -o pv_name,vg_name
+      register: current_pvs_output
+      changed_when: false
+      when: vg_exists
+
+    - name: Parse current PVs in the VG
+      set_fact:
+        current_pv_devices: "{{ current_pvs_output.stdout_lines | select('search', vg_name) | map('split') | map('first') | list }}"
+      when: vg_exists
+
+    - name: Resolve current PV devices to disk IDs
+      shell: |
+        for pv in {{ current_pv_devices | join(' ') }}; do
+          ls -la /dev/disk/by-id/ 2>/dev/null | grep "$(basename $pv)$" | grep -v part | awk '{print $9}' | head -1
+        done
+      register: current_disk_ids_output
+      changed_when: false
+      when: vg_exists and current_pv_devices is defined
+
+    - name: Set current disk IDs
+      set_fact:
+        current_disk_ids: "{{ (current_disk_ids_output.stdout_lines | default([])) | sort }}"
+        desired_disk_ids: "{{ gamma_disk_ids | sort }}"
+      when: vg_exists
+
+    - name: Check if disk configuration matches
+      set_fact:
+        disks_match: "{{ current_disk_ids == desired_disk_ids }}"
+      when: vg_exists
+
+    - name: Display configuration comparison
+      debug:
+        msg: |
+          VG Status: {{ 'EXISTS' if vg_exists else 'DOES NOT EXIST' }}
+          {% if vg_exists %}
+          Current disks: {{ current_disk_ids | default(['none']) | join(', ') }}
+          Desired disks: {{ desired_disk_ids | join(', ') }}
+          Configuration matches: {{ disks_match | default(false) }}
+          {% endif %}
+
+    - name: Check for logical volumes if VG exists and disks don't match
+      command: lvs --noheadings -o lv_name {{ vg_name }}
+      register: lv_check
+      changed_when: false
+      failed_when: false
+      when:
+        - vg_exists
+        - not (disks_match | default(true))
+
+    - name: Warn if VG needs recreation
+      pause:
+        prompt: |
+
+          ⚠️  WARNING: Volume group {{ vg_name }} exists but disk configuration differs!
+
+          Current disks: {{ current_disk_ids | default(['unknown']) | join(', ') }}
+          Desired disks: {{ desired_disk_ids | join(', ') }}
+
+          The VG has {{ lv_check.stdout_lines | default([]) | length }} logical volume(s).
+          Recreating the VG will DESTROY ALL DATA!
+
+          Press Ctrl+C to abort, or Enter to continue with recreation.
+
+      when:
+        - vg_exists
+        - not (disks_match | default(true))
+        - lv_check.stdout_lines | default([]) | length > 0
+
+    - name: Remove VG if disk configuration differs
+      block:
+        - name: Deactivate volume group
+          command: vgchange -an {{ vg_name }}
+          failed_when: false
+
+        - name: Remove existing logical volumes
+          command: lvremove -f {{ vg_name }}
+          failed_when: false
+
+        - name: Remove volume group
+          command: vgremove -f {{ vg_name }}
+
+        - name: Remove physical volumes from current disks
+          command: pvremove -ff {{ item }}
+          loop: "{{ current_pv_devices }}"
+          failed_when: false
+          when: current_pv_devices is defined
+
+        - name: Wipe filesystem signatures from current disks
+          command: wipefs -a {{ item }}
+          loop: "{{ current_pv_devices }}"
+          failed_when: false
+          when: current_pv_devices is defined
+
+        - name: Set VG existence to false after removal
+          set_fact:
+            vg_exists: false
+
+      when:
+        - vg_exists
+        - not (disks_match | default(true))
+
+    - name: Create volume group with disk IDs
+      community.general.lvg:
+        vg: "{{ vg_name }}"
+        pvs: "{{ disk_by_id_paths | join(',') }}"
+        pesize: "{{ pe_size }}"
+        state: present
+      when: not vg_exists
+
+    - name: Get VG information
+      command: vgs --units g -o vg_name,pv_count,vg_size,vg_free,vg_attr {{ vg_name }}
+      register: vg_info
+      changed_when: false
+
+    - name: Get PV information
+      command: pvs --units g -o pv_name,vg_name,pv_size,pv_free
+      register: pv_info
+      changed_when: false
+
+    - name: Check if thin pool exists
+      command: lvs --noheadings -o lv_name {{ vg_name }}/{{ thin_pool_name }}
+      register: thin_pool_check
+      changed_when: false
+      failed_when: false
+
+    - name: Create thin pool if it doesn't exist
+      community.general.lvol:
+        vg: "{{ vg_name }}"
+        lv: "{{ thin_pool_name }}"
+        size: "{{ thin_pool_size }}"
+        opts: "--type thin-pool"
+      when: thin_pool_check.rc != 0
+
+    - name: Check if Proxmox storage is configured
+      command: pvesm status
+      register: storage_status
+      changed_when: false
+      failed_when: false
+
+    - name: Parse storage status
+      set_fact:
+        storage_exists: "{{ vg_name in storage_status.stdout }}"
+
+    - name: Add to Proxmox storage configuration
+      command: pvesm add {{ proxmox_storage_type }} {{ vg_name }} --thinpool {{ thin_pool_name }} --vgname {{ vg_name }}
+      when: not storage_exists
+
+    - name: Get final storage status
+      command: pvesm status
+      register: final_storage_status
+      changed_when: false
+
+    - name: Display final configuration
+      debug:
+        msg: |
+
+          ✅ Volume Group {{ vg_name }} is ready!
+
+          Volume Group Information:
+          {{ vg_info.stdout }}
+
+          Physical Volumes:
+          {{ pv_info.stdout }}
+
+          Proxmox Storage Status:
+          {{ final_storage_status.stdout_lines | select('search', vg_name) | list | join('\n') }}
+
+          Next steps:
+          - Your gamma storage is ready for use
+          - VMs can now use '{{ vg_name }}' as their datastore
+          - The configuration uses disk IDs for persistence
+
+    - name: Save configuration summary to local machine
+      copy:
+        content: |
+          Gamma Volume Group Configuration
+          =================================
+
+          Date: {{ ansible_date_time.iso8601 }}
+          Proxmox Host: {{ inventory_hostname }}
+          Volume Group: {{ vg_name }}
+          Physical Extent Size: {{ pe_size }}
+
+          Disks Used (by ID):
+          {% for disk in gamma_disk_ids %}
+          - {{ disk }}
+          {% endfor %}
+
+          Device Mapping:
+          {% for result in disk_stats.results %}
+          - {{ result.item }} -> {{ result.stat.lnk_target }}
+          {% endfor %}
+
+          Volume Group Status:
+          {{ vg_info.stdout }}
+
+          Physical Volumes:
+          {{ pv_info.stdout }}
+
+          IMPORTANT: This configuration uses disk IDs instead of device names
+          for idempotency. The same disks will always be used regardless of
+          device enumeration order changes.
+        dest: "/tmp/gamma-vg-config-{{ ansible_date_time.date }}.txt"
+      delegate_to: localhost
+      become: false
+
+    - name: Display summary location
+      debug:
+        msg: "Configuration saved to: /tmp/gamma-vg-config-{{ ansible_date_time.date }}.txt"
