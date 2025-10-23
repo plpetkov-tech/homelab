@@ -10,6 +10,17 @@ ENDCOLOR='\033[0m'
 echo -e "${GREEN}Ensuring libguestfs-tools and jq are installed...${ENDCOLOR}"
 sudo apt install jq libguestfs-tools -y
 
+# I found that with Proxmox VE 9 this is not working anymore and i get the same error as in the initial post.
+# It helps to install dhcpcd-base:
+# `apt install dhcpcd-base`
+
+# afterwards `virt-customize -a debian-13-genericcloud-amd64.qcow2 --install qemu-guest-agent` works fine.
+
+# See here for an upstream issue to track this:
+# https://github.com/libguestfs/libguestfs/issues/211
+# Source: https://forum.proxmox.com/threads/virt-customize-install-broken.130473/
+sudo apt install dhcpcd-base -y
+
 echo ""
 echo -e "${GREEN}Loading the environment variables from the .env files...${ENDCOLOR}"
 set -a # automatically export all variables
