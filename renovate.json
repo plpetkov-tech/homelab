@@ -219,6 +219,15 @@
         "image:\\s+['\"]?(?<depName>[^:]+):(?<currentValue>[^@'\"\\s]+)(@(?<currentDigest>sha256:[a-f0-9]+))?['\"]?"
       ],
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Update Kubernetes addon versions in k8s.env file",
+      "managerFilePatterns": ["/^scripts/k8s\\.env$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: registryUrl=(?<registryUrl>\\S+))?(?: extractVersion=(?<extractVersion>\\S+))?\\n\\S+?_VERSION=(?<currentValue>\\S+)"
+      ],
+      "extractVersionTemplate": "{{#if extractVersion}}{{{extractVersion}}}{{/if}}"
     }
   ],
   "osvVulnerabilityAlerts": true
