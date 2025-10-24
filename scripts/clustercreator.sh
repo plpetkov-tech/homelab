@@ -126,7 +126,8 @@ run_playbooks() {
   for playbook in "${playbooks[@]}"; do
     echo -e "${BLUE}Running playbook: $playbook${ENDCOLOR}"
     # Run ansible-playbook with options, extra vars, and playbook path
-    ansible-playbook "$ansible_opts" "$default_extra_vars" "$extra_vars" "$playbook"
+    # shellcheck disable=SC2086
+    ansible-playbook $ansible_opts $default_extra_vars $extra_vars "$playbook"
     if [ $? -ne 0 ]; then
       echo -e "${RED}Error: Playbook $playbook failed. Exiting.${ENDCOLOR}"
       echo -e "${BLUE}If you're having trouble diagnosing the issue, please submit an issue on GitHub!${ENDCOLOR}"
