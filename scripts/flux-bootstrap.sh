@@ -74,7 +74,7 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 GITHUB_USER="plpetkov-tech"
 GITHUB_REPO="homelab"
 GITHUB_TOKEN="$GITHUB_TOKEN"
-CLUSTER_PATH="$REPO_ROOT/flux/clusters/homelab"
+CLUSTER_PATH="flux/clusters/homelab"
 
 if [ "$GITHUB_TOKEN" = "" ]; then
     log_error "GITHUB_TOKEN environment variable is required"

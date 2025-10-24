@@ -114,6 +114,7 @@ ccr tofu apply -auto-approve
 ccr bootstrap --enable-metrics
 
 # 6. Initialize GitOps
+export GITHUB_TOKEN=<your-github-token>
 ./scripts/flux-bootstrap.sh
 ```
 
