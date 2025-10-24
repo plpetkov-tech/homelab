@@ -147,6 +147,24 @@
                       - longhorn-service-account
       delegate_to: localhost
 
+    - name: Patch longhorn-role ClusterRole to add missing RBAC permissions
+      kubernetes.core.k8s:
+        state: patched
+        api_version: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        name: longhorn-role
+        definition:
+          rules:
+            # Add replicasets permission - required for csi-provisioner capacity-ownerref-level feature
+            - apiGroups: ["apps"]
+              resources: ["replicasets"]
+              verbs: ["*"]
+            # Add csistoragecapacities permission - required for csi-provisioner enable-capacity feature
+            - apiGroups: ["storage.k8s.io"]
+              resources: ["csistoragecapacities"]
+              verbs: ["*"]
+      delegate_to: localhost
+
     - name: Wait for Longhorn to be ready
       kubernetes.core.k8s_info:
         api_version: apps/v1
