@@ -103,12 +103,12 @@ variable "clusters" {
       node_classes = {
         etcd = {
           count  = 3
-          cores  = 1
-          memory = 2048
+          cores  = 2
+          memory = 4096
           disks = [
             {
               datastore  = "local-lvm",
-              size       = 100,
+              size       = 120,
               cache_mode = "writethrough",
               aio_mode   = "io_uring"
             }

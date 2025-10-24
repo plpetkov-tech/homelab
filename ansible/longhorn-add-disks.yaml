@@ -9,9 +9,28 @@
   environment:
     KUBECONFIG: "{{ kubeconfig_file }}"
   tasks:
-    - name: Verify Longhorn is ready
-      debug:
-        msg: "Skipping wait - Longhorn should be ready if this playbook is running"
+    - name: Wait for Longhorn admission webhook service to have endpoints
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Endpoints
+        name: longhorn-admission-webhook
+        namespace: longhorn-system
+      register: webhook_endpoints
+      until:
+        - webhook_endpoints.resources is defined
+        - webhook_endpoints.resources | length > 0
+        - webhook_endpoints.resources[0].subsets is defined
+        - webhook_endpoints.resources[0].subsets | length > 0
+        - webhook_endpoints.resources[0].subsets[0].addresses is defined
+        - webhook_endpoints.resources[0].subsets[0].addresses | length > 0
+      retries: 30
+      delay: 5
+      delegate_to: localhost
+
+    - name: Wait additional time for webhook to fully initialize
+      pause:
+        seconds: 15
+        prompt: "Waiting for Longhorn admission webhook to fully initialize..."
 
     - name: Get Longhorn nodes
       kubernetes.core.k8s_info:
@@ -71,6 +90,10 @@
             disks: "{{ item.ansible_facts.node_disk_config | from_json }}"
       loop: "{{ disk_configs_raw.results }}"
       when: (item.item.cluster_name + '-' + item.item.node_class + '-' + item.item.index|string) in (longhorn_k8s_nodes.resources | map(attribute='metadata.name') | list)
+      register: disk_add_result
+      until: disk_add_result is succeeded
+      retries: 5
+      delay: 10
       delegate_to: localhost
 
     - name: Wait for disks to be added and detected

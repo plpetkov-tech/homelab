@@ -58,7 +58,7 @@
               engine:
                 tag: "v{{ longhorn_version }}"
               manager:
-                tag: "v{{ longhorn_version }}"
+                tag: "v{{ longhorn_version }}-hotfix-1"  # Use hotfix image to avoid known v1.10.0 bugs
               ui:
                 tag: "v{{ longhorn_version }}"
               instanceManager:
@@ -83,7 +83,7 @@
             restoreVolumeRecurringJobs: true
             concurrentAutomaticEngineUpgradePerNodeLimit: 3
             systemManagedComponentsNodeSelector: "kubernetes.io/os:linux"
-            # Conservative settings for gamma 5-disk storage  
+            # Conservative settings for gamma 5-disk storage
             storageOverProvisioningPercentage: 110   # Conservative over-provisioning (10% buffer)
             storageMinimalAvailablePercentage: 15    # Keep 15% free space minimum
             upgradeChecker: false                    # Disable upgrade checker for stability
@@ -100,6 +100,51 @@
           longhornUI:
             nodeSelector:
               kubernetes.io/os: "linux"
+      delegate_to: localhost
+
+    - name: Patch longhorn-manager to fix known v1.10.0 issues
+      kubernetes.core.k8s:
+        state: patched
+        api_version: apps/v1
+        kind: DaemonSet
+        name: longhorn-manager
+        namespace: longhorn-system
+        definition:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: longhorn-manager
+                    # Fix readiness probe to check port 9502 (admission webhook) instead of 9501 (conversion webhook)
+                    # Port 9501 fails to start due to circular dependency in webhook initialization
+                    readinessProbe:
+                      httpGet:
+                        path: /v1/healthz
+                        port: 9502
+                        scheme: HTTPS
+                      periodSeconds: 10
+                      timeoutSeconds: 1
+                      successThreshold: 1
+                      failureThreshold: 3
+                    # Remove --upgrade-version-check flag to prevent waitForOldLonghornManagersToBeFullyRemoved deadlock
+                    command:
+                      - longhorn-manager
+                      - -d
+                      - daemon
+                      - --engine-image
+                      - longhornio/longhorn-engine:v{{ longhorn_version }}
+                      - --instance-manager-image
+                      - longhornio/longhorn-instance-manager:v{{ longhorn_version }}
+                      - --share-manager-image
+                      - longhornio/longhorn-share-manager:v{{ longhorn_version }}
+                      - --backing-image-manager-image
+                      - longhornio/backing-image-manager:v{{ longhorn_version }}
+                      - --support-bundle-manager-image
+                      - longhornio/support-bundle-kit:v{{ longhorn_version }}
+                      - --manager-image
+                      - longhornio/longhorn-manager:v{{ longhorn_version }}-hotfix-1
+                      - --service-account
+                      - longhorn-service-account
       delegate_to: localhost
 
     - name: Wait for Longhorn to be ready

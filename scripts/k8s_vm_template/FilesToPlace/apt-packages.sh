@@ -33,15 +33,14 @@ mkdir -m 755 /etc/apt/keyrings
 curl -fsSL "https://pkgs.k8s.io/core:/stable:/v${KUBERNETES_SHORT_VERSION}/deb/Release.key" | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBERNETES_SHORT_VERSION}/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
 
-# add helm apt repository
-curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | tee /usr/share/keyrings/helm.gpg > /dev/null
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list
+# Note: Helm will be installed via script instead of apt repository
+# to avoid DNS/repo issues with baltocdn.com
 
 # update apt cache
 apt-get update
 apt upgrade -y
 
-# Install packages from apt
+# Install packages from apt (without kubernetes packages first)
 apt install -y \
 bash \
 curl \
@@ -71,14 +70,116 @@ cron \
 iproute2 \
 intel-gpu-tools \
 intel-opencl-icd \
-helm \
-etcd-client \
-kubelet="$KUBERNETES_LONG_VERSION" \
-kubeadm="$KUBERNETES_LONG_VERSION" \
-kubectl="$KUBERNETES_LONG_VERSION"
+etcd-client
+
+# Install Helm using the official script (more reliable than apt repo)
+echo "Installing Helm via official script..."
+curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+# =============================================================================
+# IMPROVED KUBERNETES PACKAGE INSTALLATION WITH DEBUGGING
+# =============================================================================
+
+echo "=== Kubernetes Package Installation Debug ==="
+echo "KUBERNETES_SHORT_VERSION: $KUBERNETES_SHORT_VERSION"
+echo "KUBERNETES_MEDIUM_VERSION: $KUBERNETES_MEDIUM_VERSION"
+echo "KUBERNETES_LONG_VERSION: $KUBERNETES_LONG_VERSION"
+
+# Clear any potential apt cache issues
+echo "Cleaning apt cache..."
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+apt-get update
+
+# Verify the exact versions available
+echo "=== Checking available Kubernetes package versions ==="
+echo "Available kubelet versions matching $KUBERNETES_MEDIUM_VERSION:"
+apt-cache madison kubelet | grep "$KUBERNETES_MEDIUM_VERSION" | head -3
+
+echo "Available kubeadm versions matching $KUBERNETES_MEDIUM_VERSION:"
+apt-cache madison kubeadm | grep "$KUBERNETES_MEDIUM_VERSION" | head -3
+
+echo "Available kubectl versions matching $KUBERNETES_MEDIUM_VERSION:"
+apt-cache madison kubectl | grep "$KUBERNETES_MEDIUM_VERSION" | head -3
+
+# Test if the exact version exists before installing
+if apt-cache madison kubelet | grep -q "$KUBERNETES_LONG_VERSION"; then
+    echo "✓ kubelet version $KUBERNETES_LONG_VERSION found"
+else
+    echo "✗ kubelet version $KUBERNETES_LONG_VERSION NOT found"
+    echo "Available $KUBERNETES_MEDIUM_VERSION versions for kubelet:"
+    apt-cache madison kubelet | grep "$KUBERNETES_MEDIUM_VERSION"
+
+    # Try to auto-detect the correct version
+    DETECTED_VERSION=$(apt-cache madison kubelet | grep "$KUBERNETES_MEDIUM_VERSION" | head -1 | awk '{print $3}')
+    if [ -n "$DETECTED_VERSION" ]; then
+        echo "Auto-detected available version: $DETECTED_VERSION"
+        echo "Updating KUBERNETES_LONG_VERSION to: $DETECTED_VERSION"
+        KUBERNETES_LONG_VERSION="$DETECTED_VERSION"
+    else
+        echo "ERROR: No $KUBERNETES_MEDIUM_VERSION versions found for kubelet"
+        exit 1
+    fi
+fi
+
+# Install with explicit error handling
+echo "=== Installing Kubernetes packages ==="
+echo "Installing with version: $KUBERNETES_LONG_VERSION"
+
+if apt install -y \
+    kubelet="$KUBERNETES_LONG_VERSION" \
+    kubeadm="$KUBERNETES_LONG_VERSION" \
+    kubectl="$KUBERNETES_LONG_VERSION"; then
+    
+    echo "✓ Successfully installed Kubernetes packages"
+else
+    echo "✗ Failed to install Kubernetes packages with version $KUBERNETES_LONG_VERSION"
+    echo "Attempting fallback installation..."
+
+    # Fallback: get the actual available version
+    ACTUAL_VERSION=$(apt-cache madison kubelet | grep "$KUBERNETES_MEDIUM_VERSION" | head -1 | awk '{print $3}')
+    if [ -n "$ACTUAL_VERSION" ]; then
+        echo "Trying fallback version: $ACTUAL_VERSION"
+        
+        if apt install -y \
+            kubelet="$ACTUAL_VERSION" \
+            kubeadm="$ACTUAL_VERSION" \
+            kubectl="$ACTUAL_VERSION"; then
+            echo "✓ Fallback installation successful"
+        else
+            echo "✗ Fallback installation also failed"
+            exit 1
+        fi
+    else
+        echo "✗ No fallback version available"
+        exit 1
+    fi
+fi
+
+# Verify installation
+echo "=== Verifying Kubernetes installation ==="
+if which kubelet && which kubeadm && which kubectl; then
+    echo "✓ All Kubernetes binaries found in PATH"
+    kubelet --version
+    kubeadm version --output=short
+    kubectl version --client --output=yaml
+else
+    echo "✗ Some Kubernetes binaries not found in PATH"
+    echo "kubelet: $(which kubelet || echo 'NOT FOUND')"
+    echo "kubeadm: $(which kubeadm || echo 'NOT FOUND')"  
+    echo "kubectl: $(which kubectl || echo 'NOT FOUND')"
+    exit 1
+fi
 
 # hold back kubernetes packages
+echo "=== Holding Kubernetes packages ==="
 apt-mark hold kubelet kubeadm kubectl
+echo "Held packages:"
+apt-mark showhold | grep -E "(kubelet|kubeadm|kubectl)"
+
+# =============================================================================
+# END OF IMPROVED KUBERNETES INSTALLATION
+# =============================================================================
 
 # install containerd, which have different package names on Debian and Ubuntu
 distro=$(lsb_release -is)
@@ -268,13 +369,32 @@ echo "containerd is ready!"
 sleep 5
 
 # Pre-pull kubeadm images to speed up cluster bootstrap
+echo "=== Pre-pulling Kubernetes images ==="
 echo "Pre-pulling Kubernetes images for faster cluster initialization..."
+echo "Using Kubernetes version: $KUBERNETES_MEDIUM_VERSION"
+
 if kubeadm config images pull --kubernetes-version="$KUBERNETES_MEDIUM_VERSION" --v=2; then
-    echo "Successfully pre-pulled Kubernetes images"
+    echo "✓ Successfully pre-pulled Kubernetes images"
 else
-    echo "WARNING: Failed to pre-pull images, but continuing. Images will be pulled during cluster init."
+    echo "⚠ WARNING: Failed to pre-pull images, but continuing. Images will be pulled during cluster init."
+    echo "This might happen if kubeadm isn't working correctly. Let's verify:"
+    kubeadm version || echo "kubeadm version command failed"
     # Don't exit on failure here since the cluster can still work, images will just be pulled later
 fi
 
+# Final verification
+echo "=== Final Installation Verification ==="
+echo "Installed Kubernetes packages:"
+dpkg -l | grep -E "(kubelet|kubeadm|kubectl)" | awk '{print $2, $3}'
+
+echo ""
+echo "Kubernetes binary versions:"
+kubelet --version 2>/dev/null || echo "kubelet version check failed"
+kubeadm version --output=short 2>/dev/null || echo "kubeadm version check failed"
+kubectl version --client --output=yaml 2>/dev/null || echo "kubectl version check failed"
+
 # extraneous package cleanup
+echo "=== Cleaning up ==="
 apt autoremove -y
+
+echo "=== Script completed successfully ==="
