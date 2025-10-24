@@ -4,9 +4,9 @@ kind: Kustomization
 resources:
   - infrastructure-core.yaml
   - infrastructure-platform.yaml
-  - infrastructure-security-policies.yaml  
-  - infrastructure-backup.yaml
-  - infrastructure-backup-schedules.yaml
+  - infrastructure-security-policies.yaml
+  # - infrastructure-backup.yaml
+  # - infrastructure-backup-schedules.yaml
   - apps-monitoring.yaml
   - apps-monitoring-extras.yaml
   - apps-ai.yaml
