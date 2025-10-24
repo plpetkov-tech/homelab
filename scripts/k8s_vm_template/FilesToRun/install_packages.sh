@@ -16,10 +16,10 @@ pid2=$!
 pid3=$!
 
 # wait for the first two to complete
-wait $pid1 $pid2
+wait "$pid1" "$pid2"
 
 # kill the third one, which would otherwise run indefinitely
-kill $pid3
+kill "$pid3"
 
 # cleanup
 rm -f /root/apt-packages.sh /root/source-packages.sh /root/watch-disk-space.sh

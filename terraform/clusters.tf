@@ -143,10 +143,10 @@ variable "clusters" {
               aio_mode   = "io_uring"
             },
             {
-              datastore  = "gamma",
-              size       = 1100,     # Optimized for Longhorn: 3×1100GB = 3.3TB (leaves ~324GB buffer for metadata/overhead)
-                                     # Total gamma VG: 3.73TB (4x 1TB ADATA SU750 SSDs with disk IDs)
-                                     # Thin pool: 3.62TB (95% of VG), 91% utilization with this config
+              datastore = "gamma",
+              size      = 1100, # Optimized for Longhorn: 3×1100GB = 3.3TB (leaves ~324GB buffer for metadata/overhead)
+              # Total gamma VG: 3.73TB (4x 1TB ADATA SU750 SSDs with disk IDs)
+              # Thin pool: 3.62TB (95% of VG), 91% utilization with this config
               cache_mode = "none",   # Optimal for Longhorn distributed storage
               aio_mode   = "native", # Best performance for storage workloads
               backup     = false     # Longhorn handles replication

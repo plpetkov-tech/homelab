@@ -214,7 +214,7 @@ main() {
     local total_disks=0
     
     # Test each gamma datastore disk
-    for disk in $GAMMA_DISKS; do
+    for disk in "${GAMMA_DISKS[@]}"; do
         total_disks=$((total_disks + 1))
         if ! run_disk_tests "$disk"; then
             failed_disks=$((failed_disks + 1))

@@ -147,7 +147,7 @@ done" || echo "")
 
 if [[ -n "$ACTIVE_VMS" ]]; then
     log_warning "Found VMs using ${VG_NAME} storage:"
-    for vmid in $ACTIVE_VMS; do
+    for vmid in "${ACTIVE_VMS[@]}"; do
         VM_NAME=$(run_on_proxmox "qm config $vmid | grep '^name:' | cut -d' ' -f2" || echo "unknown")
         VM_STATUS=$(run_on_proxmox "qm status $vmid | awk '{print \$2}'" || echo "unknown")
         log_warning "  VM $vmid ($VM_NAME) - Status: $VM_STATUS"
@@ -199,7 +199,7 @@ fi
 # Step 6: Get list of PVs that were in the VG
 log_info "Removing physical volumes..."
 PV_DEVICES=$(echo "$PV_LIST" | awk '{print $1}')
-for pv in $PV_DEVICES; do
+for pv in "${PV_DEVICES[@]}"; do
     log_info "  Removing PV: $pv"
     if run_on_proxmox "pvremove -ff $pv"; then
         log_success "    PV removed: $pv"
@@ -210,7 +210,7 @@ done
 
 # Step 7: Wipe filesystem signatures
 log_info "Wiping filesystem signatures..."
-for pv in $PV_DEVICES; do
+for pv in "${PV_DEVICES[@]}"; do
     log_info "  Wiping: $pv"
     if run_on_proxmox "wipefs -a $pv 2>/dev/null"; then
         log_success "    Wiped: $pv"

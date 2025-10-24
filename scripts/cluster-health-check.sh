@@ -156,7 +156,7 @@ check_control_plane() {
         log_info "  Checking $component..."
         
         local component_pods
-        component_pods=$(kubectl get pods -n kube-system -l component=$component --no-headers 2>/dev/null | grep "Running" | wc -l)
+        component_pods=$(kubectl get pods -n kube-system -l component="$component" --no-headers 2>/dev/null | grep "Running" | wc -l)
         
         if [[ "$component_pods" -gt 0 ]]; then
             log_success "$component running ($component_pods instances)"

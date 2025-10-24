@@ -39,7 +39,7 @@ set -e
 trap 'echo -e "${RED}An error occurred during destruction. Some resources may remain. Please check manually.${ENDCOLOR}"' ERR
 
 # Validate cluster exists
-if [ -z "$CLUSTER_NAME" ]; then
+if [ "$CLUSTER_NAME" = "" ]; then
     echo -e "${RED}Error: No cluster context set. Use 'ccr ctx <cluster-name>' first.${ENDCOLOR}"
     exit 1
 fi

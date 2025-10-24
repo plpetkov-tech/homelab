@@ -15,7 +15,7 @@ INSTALL_PATH="${HOME}/.local/bin/ccr"
 check_required_vars() {
   local missing_vars=0
   for var in "$@"; do
-    if [ -z "${!var}" ]; then
+    if [ "${!var}" = "" ]; then
       if [[ $0 =~ clustercreator.sh|ccr ]]; then
         echo -e "${RED}Error: Environment variable $var is not set. Please set it in your secrets and/or environment configuration.${ENDCOLOR}" >&2
       else
@@ -46,7 +46,7 @@ print_env_vars() {
 
   # Find the maximum length of the variable names (to print aligned output)
   for var in "$@"; do
-    if [ ${#var} -gt $max_length ]; then
+    if [ ${#var} -gt "$max_length" ]; then
       max_length=${#var}
     fi
   done
@@ -58,7 +58,7 @@ print_env_vars() {
 
   # Print each variable with aligned output
   for var in "$@"; do
-    if [ -z "${!var}" ]; then  # Using indirect parameter expansion to check variable by name
+    if [ "${!var}" = "" ]; then  # Using indirect parameter expansion to check variable by name
       echo -e "${RED}Error: Environment variable $var is not set.${ENDCOLOR}" >&2
       exit 1
     else
@@ -126,7 +126,7 @@ run_playbooks() {
   for playbook in "${playbooks[@]}"; do
     echo -e "${BLUE}Running playbook: $playbook${ENDCOLOR}"
     # Run ansible-playbook with options, extra vars, and playbook path
-    ansible-playbook $ansible_opts $default_extra_vars $extra_vars "$playbook"
+    ansible-playbook "$ansible_opts" "$default_extra_vars" "$extra_vars" "$playbook"
     if [ $? -ne 0 ]; then
       echo -e "${RED}Error: Playbook $playbook failed. Exiting.${ENDCOLOR}"
       echo -e "${BLUE}If you're having trouble diagnosing the issue, please submit an issue on GitHub!${ENDCOLOR}"
@@ -157,8 +157,8 @@ setup-ccr() {
 
     echo -e "${BLUE}Linking clustercreator.sh to ${INSTALL_PATH}${ENDCOLOR}"
     chmod +x "${REPO_PATH}/clustercreator.sh"
-    sudo unlink "${INSTALL_PATH}" 2>/dev/null || true
-    sudo ln -s "${REPO_PATH}/clustercreator.sh" "${INSTALL_PATH}"
+    sudo unlink "$INSTALL_PATH" 2>/dev/null || true
+    sudo ln -s "${REPO_PATH}/clustercreator.sh" "$INSTALL_PATH"
     echo ""
     echo -e "${BLUE}Installation complete. You can now use 'ccr' as a command.${ENDCOLOR}"
     echo ""

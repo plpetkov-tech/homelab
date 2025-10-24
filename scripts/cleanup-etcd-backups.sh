@@ -57,14 +57,14 @@ if [ ! -f "tmp/$CLUSTER_NAME/cluster_config.json" ]; then
 fi
 
 # Get etcd node IPs from cluster config
-ETCD_NODES=$(jq -r '.node_classes.etcd | "10.11.12." + (.start_ip | tostring) + " " + "10.11.12." + ((.start_ip + 1) | tostring) + " " + "10.11.12." + ((.start_ip + 2) | tostring)' tmp/$CLUSTER_NAME/cluster_config.json)
+ETCD_NODES=$(jq -r '.node_classes.etcd | "10.11.12." + (.start_ip | tostring) + " " + "10.11.12." + ((.start_ip + 1) | tostring) + " " + "10.11.12." + ((.start_ip + 2) | tostring)' tmp/"$CLUSTER_NAME"/cluster_config.json)
 
 if [ "$DRY_RUN" = true ]; then
     echo -e "${YELLOW}DRY RUN MODE - No files will be deleted${ENDCOLOR}"
 fi
 
 # Clean up backups on each etcd node
-for node in $ETCD_NODES; do
+for node in "${ETCD_NODES[@]}"; do
     echo -e "${GREEN}Processing etcd node: $node${ENDCOLOR}"
     
     # Check if node is reachable
@@ -81,7 +81,7 @@ for node in $ETCD_NODES; do
     echo "Finding backup files older than $DAYS days..."
     OLD_FILES=$(ssh plamen@"$node" "sudo find /var/backups/etcd -name '*.db' -type f -mtime +$DAYS 2>/dev/null" || echo "")
     
-    if [ -z "$OLD_FILES" ]; then
+    if [ "$OLD_FILES" = "" ]; then
         echo "No old backup files found on $node"
         continue
     fi

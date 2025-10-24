@@ -73,10 +73,10 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 # Set variables
 GITHUB_USER="plpetkov-tech"
 GITHUB_REPO="homelab"
-GITHUB_TOKEN="${GITHUB_TOKEN}"
+GITHUB_TOKEN="$GITHUB_TOKEN"
 CLUSTER_PATH="$REPO_ROOT/flux/clusters/homelab"
 
-if [ -z "$GITHUB_TOKEN" ]; then
+if [ "$GITHUB_TOKEN" = "" ]; then
     log_error "GITHUB_TOKEN environment variable is required"
     echo "Please set it with: export GITHUB_TOKEN=<your-token>"
     exit 1
@@ -105,10 +105,10 @@ log_info "🔧 Bootstrapping Flux v2 with GitHub repository..."
 # Bootstrap Flux
 if flux bootstrap github \
   --components-extra=image-reflector-controller,image-automation-controller \
-  --owner=$GITHUB_USER \
-  --repository=$GITHUB_REPO \
+  --owner="$GITHUB_USER" \
+  --repository="$GITHUB_REPO" \
   --branch=main \
-  --path=$CLUSTER_PATH \
+  --path="$CLUSTER_PATH" \
   --personal \
   --token-auth; then
     log_success "Flux v2 bootstrap completed!"
@@ -149,7 +149,7 @@ validate_kustomization() {
     
     log_info "⏳ Waiting for kustomization '$kustomization_name' to be ready..."
     
-    for i in $(seq 1 $((timeout/10))); do
+    for i in "$(seq 1 $((timeout/10)))"; do
         if kubectl get kustomization "$kustomization_name" -n flux-system -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null | grep -q "True"; then
             log_success "✅ Kustomization '$kustomization_name' is ready"
             return 0

@@ -101,7 +101,7 @@ validate_storage() {
     
     if kubectl get storageclass >/dev/null 2>&1; then
         local default_sc=$(kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
-        if [ -n "$default_sc" ]; then
+        if [ "$default_sc" != "" ]; then
             log_success "✅ Default storage class '$default_sc' found"
         else
             log_warning "⚠️ No default storage class found"

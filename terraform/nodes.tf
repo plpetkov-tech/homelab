@@ -49,9 +49,9 @@ resource "proxmox_virtual_environment_vm" "node" {
     }
   }
   dynamic "hostpci" {
-    for_each = { 
-      for idx, device in each.value.devices : idx => device 
-      if device.type == "pci" 
+    for_each = {
+      for idx, device in each.value.devices : idx => device
+      if device.type == "pci"
     }
     content {
       device  = "hostpci${hostpci.key}" # `key` is now the index (0, 1, 2, etc.) so we match the schema

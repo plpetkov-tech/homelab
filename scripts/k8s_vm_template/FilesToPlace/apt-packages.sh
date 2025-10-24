@@ -112,7 +112,7 @@ else
 
     # Try to auto-detect the correct version
     DETECTED_VERSION=$(apt-cache madison kubelet | grep "$KUBERNETES_MEDIUM_VERSION" | head -1 | awk '{print $3}')
-    if [ -n "$DETECTED_VERSION" ]; then
+    if [ "$DETECTED_VERSION" != "" ]; then
         echo "Auto-detected available version: $DETECTED_VERSION"
         echo "Updating KUBERNETES_LONG_VERSION to: $DETECTED_VERSION"
         KUBERNETES_LONG_VERSION="$DETECTED_VERSION"
@@ -138,7 +138,7 @@ else
 
     # Fallback: get the actual available version
     ACTUAL_VERSION=$(apt-cache madison kubelet | grep "$KUBERNETES_MEDIUM_VERSION" | head -1 | awk '{print $3}')
-    if [ -n "$ACTUAL_VERSION" ]; then
+    if [ "$ACTUAL_VERSION" != "" ]; then
         echo "Trying fallback version: $ACTUAL_VERSION"
         
         if apt install -y \
@@ -354,7 +354,7 @@ echo "Waiting for containerd to be ready..."
 max_attempts=30
 attempt=0
 while ! systemctl is-active --quiet containerd || ! ctr version &>/dev/null; do
-    if [ $attempt -ge $max_attempts ]; then
+    if [ "$attempt" -ge "$max_attempts" ]; then
         echo "ERROR: containerd failed to start within $max_attempts seconds"
         exit 1
     fi

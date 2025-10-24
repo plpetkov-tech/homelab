@@ -22,7 +22,7 @@ else
 fi
 
 # Remove packages for non-current kernels
-for kernel_version in $(dpkg --list | grep -oP "^ii\s+linux-modules-extra-\K[^\s]+" | sort -u); do
+for kernel_version in "$(dpkg --list | grep -oP "^ii\s+linux-modules-extra-\K[^\s]+" | sort -u)"; do
   if [[ "$kernel_version" != "$current_kernel_version" ]]; then
     echo "Removing linux-modules-extra-$kernel_version (not current kernel)"
     apt-get remove -y "linux-modules-extra-$kernel_version" >> /var/log/extra-kernel-modules.log 2>&1
