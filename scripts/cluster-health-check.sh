@@ -336,22 +336,6 @@ check_network() {
     else
         log_error "Cilium pods not running"
     fi
-    
-    # Check MetalLB
-    ((TOTAL_CHECKS++))
-    if kubectl get namespace metallb-system &> /dev/null; then
-        local metallb_controller metallb_speakers
-        metallb_controller=$(kubectl get pods -n metallb-system -l app=metallb,component=controller --no-headers 2>/dev/null | grep "Running" | wc -l)
-        metallb_speakers=$(kubectl get pods -n metallb-system -l app=metallb,component=speaker --no-headers 2>/dev/null | grep "Running" | wc -l)
-        
-        if [[ "$metallb_controller" -gt 0 && "$metallb_speakers" -gt 0 ]]; then
-            log_success "MetalLB running (controller: $metallb_controller, speakers: $metallb_speakers)"
-        else
-            log_warning "MetalLB issues (controller: $metallb_controller, speakers: $metallb_speakers)"
-        fi
-    else
-        log_warning "MetalLB not installed"
-    fi
 }
 
 # Check critical addons

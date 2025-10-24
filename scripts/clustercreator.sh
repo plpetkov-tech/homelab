@@ -300,7 +300,6 @@ required_vars=(
   "KUBELET_SERVING_CERT_APPROVER_VERSION"
   "LOCAL_PATH_PROVISIONER_VERSION"
   "METRICS_SERVER_VERSION"
-  "METALLB_VERSION"
   "CLUSTER_NAME"
 )
 # Only run check_required_vars and print_env_vars for specified commands
