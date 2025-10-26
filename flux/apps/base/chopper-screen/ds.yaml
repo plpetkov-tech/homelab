@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: chopper-screen
+  namespace: chopper-screen
+  labels:
+    app: chopper-screen
+spec:
+  selector:
+    matchLabels:
+      app: chopper-screen
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: chopper-screen
+    spec:
+      hostNetwork: true
+      restartPolicy: Always
+
+      containers:
+      - name: dashboard
+        image: ghcr.io/plpetkov-tech/chopper-screen:latest
+        imagePullPolicy: IfNotPresent
+
+        securityContext:
+          privileged: true  # Required for framebuffer and backlight access
+          capabilities:
+            add:
+              - SYS_ADMIN
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        envFrom:
+        - configMapRef:
+            name: chopper-screen-config
+
+        volumeMounts:
+        - name: framebuffer
+          mountPath: /dev/fb0
+        - name: backlight
+          mountPath: /sys/class/backlight
+          readOnly: false
+        - name: input
+          mountPath: /dev/input
+          readOnly: true
+        - name: shm
+          mountPath: /dev/shm
+
+        livenessProbe:
+          exec:
+            command:
+              - pgrep
+              - -f
+              - dashboard.py
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          timeoutSeconds: 10
+          failureThreshold: 3
+
+        readinessProbe:
+          exec:
+            command:
+              - pgrep
+              - -f
+              - dashboard.py
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+
+      volumes:
+      - name: framebuffer
+        hostPath:
+          path: /dev/fb0
+          type: CharDevice
+      - name: backlight
+        hostPath:
+          path: /sys/class/backlight
+          type: Directory
+      - name: input
+        hostPath:
+          path: /dev/input
+          type: Directory
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 128Mi

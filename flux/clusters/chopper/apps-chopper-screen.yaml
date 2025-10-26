@@ -2,7 +2,7 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: apps-demo
+  name: apps-chopper-screen
   namespace: flux-system
 spec:
   interval: 10m
@@ -10,7 +10,7 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  path: ./flux/apps/base/demo
+  path: ./flux/apps/base/chopper-screen
   prune: true
   wait: true
   decryption:

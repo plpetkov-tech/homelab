@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chopper-screen-config
+  namespace: chopper-screen
+data:
+  # URL to display
+  DISPLAY_URL: "https://google.com"
+
+  # Refresh interval in seconds
+  REFRESH_INTERVAL: "300"
+
+  # Night mode settings
+  NIGHT_MODE_ENABLED: "true"
+  NIGHT_START: "22:00"
+  NIGHT_END: "07:00"
+
+  # Display settings
+  WINDOW_WIDTH: "1920"
+  WINDOW_HEIGHT: "1080"
+  FULLSCREEN: "true"
+
+  # Chromium settings
+  CHROMIUM_TIMEOUT: "30"
+
+  # Check interval for schedule
+  CHECK_INTERVAL: "60"
+
+  # Backlight settings (leave empty for auto-detect)
+  BACKLIGHT_PATH: ""
+  BACKLIGHT_MAX: "255"
