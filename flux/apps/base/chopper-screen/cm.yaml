@@ -19,6 +19,7 @@ data:
   WINDOW_WIDTH: "1920"
   WINDOW_HEIGHT: "1080"
   FULLSCREEN: "true"
+  ROTATION: "90"  # Rotation in degrees: 0, 90, 180, 270
 
   # Chromium settings
   CHROMIUM_TIMEOUT: "30"

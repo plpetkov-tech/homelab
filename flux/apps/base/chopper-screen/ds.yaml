@@ -23,7 +23,7 @@ spec:
 
       containers:
       - name: dashboard
-        image: ghcr.io/plpetkov-tech/chopper-screen:main-4788a24
+        image: ghcr.io/plpetkov-tech/chopper-screen:main-ac8adca
         imagePullPolicy: IfNotPresent
 
         securityContext:
