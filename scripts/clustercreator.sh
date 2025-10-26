@@ -214,6 +214,7 @@ display_usage() {
     echo "  update-metrics       Updates existing cluster to expose control plane metrics (scheduler, controller-manager, etcd)"
     echo "  health-check         Performs comprehensive health checks on the cluster components"
     echo "  fix-gpu-operator     Fixes GPU operator validation deadlock when driver.enabled=false"
+    echo "  fix-longhorn-webhook Fixes Longhorn conversion webhook issue causing API server overload and memory exhaustion"
     echo "  vmctl                Controls VM state, including power controls and backups"
     echo "  run-command          Runs a bash command on a host or an Ansible host group"
     echo "  toggle-providers     Toggles the S3 (Minio) and Unifi providers"
@@ -317,6 +318,7 @@ if [[ "$COMMAND" == "template" || \
       "$COMMAND" == "update-metrics" || \
       "$COMMAND" == "health-check" || \
       "$COMMAND" == "fix-gpu-operator" || \
+      "$COMMAND" == "fix-longhorn-webhook" || \
       "$COMMAND" == "vmctl" || \
       "$COMMAND" == "run-command" \
     ]]; then
@@ -382,6 +384,9 @@ case "$COMMAND" in
         ;;
     fix-gpu-operator)
         ( "$REPO_PATH/scripts/fix_gpu_operator.sh" "$@" )
+        ;;
+    fix-longhorn-webhook)
+        ( "$REPO_PATH/scripts/fix-longhorn-webhook.sh" "$@" )
         ;;
     vmctl)
         ( "$REPO_PATH/scripts/vmctl.sh" "$@")
