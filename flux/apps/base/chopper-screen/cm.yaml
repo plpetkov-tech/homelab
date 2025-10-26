@@ -12,8 +12,8 @@ data:
 
   # Night mode settings
   NIGHT_MODE_ENABLED: "true"
-  NIGHT_START: "22:00"
-  NIGHT_END: "07:00"
+  NIGHT_START: "16:40"
+  NIGHT_END: "16:30"
 
   # Display settings
   WINDOW_WIDTH: "1920"
