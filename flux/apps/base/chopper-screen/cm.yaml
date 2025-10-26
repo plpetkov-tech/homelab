@@ -5,7 +5,7 @@ metadata:
   namespace: chopper-screen
 data:
   # URL to display
-  DISPLAY_URL: "https://google.com"
+  DISPLAY_URL: "https://plamen.works"
 
   # Refresh interval in seconds
   REFRESH_INTERVAL: "300"
