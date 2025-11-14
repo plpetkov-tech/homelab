@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: ollama
-        image: docker.io/ollama/ollama:0.12.6@sha256:a61a8fd395dbb931cc8cb1b5da7a2510746575c87113fdc45b647ee59ef7f808 # {"$imagepolicy": "flux-system:ollama"} 
+        image: docker.io/ollama/ollama:0.12.11@sha256:3d8a05e3432d50ea57594fabe971e46cc8fe963a0f9f8c40400bd56cd5388e47 # {"$imagepolicy": "flux-system:ollama"} 
         imagePullPolicy: Always
         env:
         - name: OLLAMA_HOST
