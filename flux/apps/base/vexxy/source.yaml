@@ -8,6 +8,6 @@ spec:
   interval: 5m
   url: https://github.com/plpetkov-tech/all-vexxy.git
   ref:
-    tag: v0.1.2
+    branch: main
   secretRef:
     name: vexxy-git-auth
