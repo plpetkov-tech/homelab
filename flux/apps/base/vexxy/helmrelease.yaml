@@ -17,12 +17,10 @@ spec:
   targetNamespace: vexxy
   install:
     crds: CreateReplace
-    replace: true
     remediation:
       retries: 3
   upgrade:
     crds: CreateReplace
-    force: true
     remediation:
       retries: 3
   values:
