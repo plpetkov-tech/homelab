@@ -85,7 +85,7 @@ spec:
     vexxy-api:
       replicaCount: 1
       image:
-        tag: "v0.1.4"
+        tag: "0.1.4"
       service:
         type: ClusterIP
         port: 8000
@@ -112,7 +112,7 @@ spec:
     vexxy-worker:
       replicaCount: 1
       image:
-        tag: "v0.1.4"
+        tag: "0.1.4"
       concurrency: 4
       queues: "celery,enrichment,ingestion,analysis"
       resources:
@@ -127,7 +127,7 @@ spec:
 
     vexxy-beat:
       image:
-        tag: "v0.1.4"
+        tag: "0.1.4"
       resources:
         requests:
           cpu: 50m
@@ -139,7 +139,7 @@ spec:
     vexxy-frontend:
       replicaCount: 1
       image:
-        tag: "v0.1.4"
+        tag: "0.1.4"
       service:
         type: ClusterIP
         port: 80
@@ -155,7 +155,7 @@ spec:
     vexxor:
       enabled: true
       image:
-        tag: "v0.1.4"
+        tag: "0.1.4"
       port: 8080
       resources:
         requests:
@@ -171,7 +171,7 @@ spec:
     kickstart:
       enabled: true
       image:
-        tag: "v0.1.4"
+        tag: "0.1.4"
       resources:
         requests:
           cpu: 100m
