@@ -6,7 +6,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 5m
-  url: https://github.com/plpetkov-tech/all-vexxy.git
+  url: https://github.com/vexxy-xyz/all-vexxy.git
   ref:
     branch: main
   secretRef:
