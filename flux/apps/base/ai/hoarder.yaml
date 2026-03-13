@@ -176,7 +176,7 @@ spec:
     spec:
       containers:
       - name: hoarder
-        image: ghcr.io/hoarder-app/hoarder:0.27.1@sha256:abd7d6b11b1b8fa3593d1971f886a74850ba8d6a99291218b150207d5a60378e # {"$imagepolicy": "flux-system:hoarder"}
+        image: ghcr.io/hoarder-app/hoarder:0.31.0@sha256:20754dbdafb11dfe288bbb1c2342a7855081b08ea069e86fcf2d4a2d945d3653 # {"$imagepolicy": "flux-system:hoarder"}
         ports:
         - containerPort: 3000
         envFrom:
