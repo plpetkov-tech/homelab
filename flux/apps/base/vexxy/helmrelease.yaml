@@ -33,7 +33,8 @@ spec:
       imagePullSecrets:
         - name: vexxy-pull-secret
       licensing:
-        enabled: false
+        enabled: true
+        serverUrl: "http://licensing-server:8100"
       secrets:
         main: vexxy-secrets
         oauth: oauth-secrets
@@ -93,7 +94,7 @@ spec:
         corsOrigins: '["*"]'
         premiumAnalysisEnabled: "true"
         oauthEnabled: "false"
-        licensingEnabled: "false"
+        licensingEnabled: "true"
       resources:
         requests:
           cpu: 200m
