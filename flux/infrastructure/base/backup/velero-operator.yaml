@@ -35,7 +35,7 @@ spec:
   values:
     image:
       repository: velero/velero
-      tag: v1.17.0@sha256:22d17d9a7e9cda10b1ffc63b4baebc35f805a22b203cb5ca65fffee51ddbde92
+      tag: v1.18.4@sha256:c89fb5b6d1fd6afd368e0f483e6f5555fd62851a1eada8ac5c72482e674ca17b
       
     initContainers:
       - name: velero-plugin-for-aws
