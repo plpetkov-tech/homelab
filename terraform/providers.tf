@@ -6,7 +6,7 @@ terraform {
     #     }
     proxmox = {
       source  = "bpg/proxmox"
-      version = "0.85.1"
+      version = "0.116.1"
     }
     unifi = {
       source  = "paultyng/unifi"
