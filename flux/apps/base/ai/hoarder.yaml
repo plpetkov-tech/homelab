@@ -119,7 +119,7 @@ spec:
     spec:
       containers:
       - name: meilisearch
-        image: docker.io/getmeili/meilisearch:v1.24.0@sha256:d991eb07331e9d1f9cec7bc0f9523fd5d51aee3b223d997e0e66206361952056 # {"$imagepolicy": "flux-system:meilisearch"}
+        image: docker.io/getmeili/meilisearch:v1.56.0@sha256:1f578fa865f8251894b3bf38d6668d6209a3f451f8f65ab953e129d4c1db5ef4 # {"$imagepolicy": "flux-system:meilisearch"}
         ports:
         - containerPort: 7700
         env:
