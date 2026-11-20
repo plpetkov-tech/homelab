@@ -458,7 +458,7 @@ spec:
     spec:
       containers:
       - name: tubesync
-        image: ghcr.io/meeb/tubesync@sha256:b080fcf760f690972ab578b6c190b5687b3255fca56590a5dc7d5247b34d3f41 # {"$imagepolicy": "flux-system:tubesync"}
+        image: ghcr.io/meeb/tubesync@sha256:5778f640d9333ff7d23f4c035d65729470ca4635cd485d560369ab63146f9efc # {"$imagepolicy": "flux-system:tubesync"}
         env:
         - name: TZ
           value: "Europe/Athens"
